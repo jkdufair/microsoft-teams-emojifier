@@ -137,6 +137,17 @@ function inject(emojiApiPath: string | undefined) {
 		div.classList.add(emojiClass)
 	}
 
+	function emojifyInput(element: Element, text: string, insert: boolean = false) {
+		// text is expected to be the whole command, i.e. :foobar:
+		const stealthMoji = `<span style="display:none">${text}</span><img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/${text.replaceAll(':','')}">`
+		if (insert)
+			element.innerHTML += stealthMoji
+		else
+			// The text in the input when typing in by hand won't have the final colon since we are intercepting
+			// the event. This is my attempt at making that replacement readable
+			element.innerHTML = element.innerHTML.replace(`:${text.replaceAll(':','')}`, stealthMoji)
+	}
+
 	function typeInInput(text: string) {
 		const editorWindow = document.getElementsByClassName("ts-edit-box").item(0)
 		if (editorWindow) {
@@ -145,7 +156,7 @@ function inject(emojiApiPath: string | undefined) {
 			if (textContainer) {
 				if (textContainer.innerHTML.includes("br"))
 					textContainer.innerHTML = ""
-				textContainer.innerText = textContainer.innerText + text
+				emojifyInput(textContainer, text, true)
 			}
 		}
 	}
@@ -457,10 +468,7 @@ function inject(emojiApiPath: string | undefined) {
 					// replace emoji text with hidden div & the emoji image
 					if (ckEditor.innerHTML && validEmojis.indexOf(plainCommand) != -1) {
 						event.preventDefault()
-						ckEditor.innerHTML = ckEditor
-							.innerHTML?.replace(commandText,
-								'<span style="display:none">' + commandText + ':</span>' +
-								'<img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/' + commandText.replace(':', '') + '">')
+						emojifyInput(ckEditor, `${commandText}:`)
 						// Put cursor after emoji just created somehow
 					}
 				}

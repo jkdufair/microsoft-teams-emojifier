@@ -115,6 +115,16 @@ function inject(emojiApiPath) {
         });
         div.classList.add(emojiClass);
     }
+    function emojifyInput(element, text, insert = false) {
+        // text is expected to be the whole command, i.e. :foobar:
+        const stealthMoji = `<span style="display:none">${text}</span><img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/${text.replaceAll(':', '')}">`;
+        if (insert)
+            element.innerHTML += stealthMoji;
+        else
+            // The text in the input when typing in by hand won't have the final colon since we are intercepting
+            // the event. This is my attempt at making that replacement readable
+            element.innerHTML = element.innerHTML.replace(`:${text.replaceAll(':', '')}`, stealthMoji);
+    }
     function typeInInput(text) {
         var _a;
         const editorWindow = document.getElementsByClassName("ts-edit-box").item(0);
@@ -124,7 +134,7 @@ function inject(emojiApiPath) {
             if (textContainer) {
                 if (textContainer.innerHTML.includes("br"))
                     textContainer.innerHTML = "";
-                textContainer.innerText = textContainer.innerText + text;
+                emojifyInput(textContainer, text, true);
             }
         }
     }
@@ -320,7 +330,6 @@ function inject(emojiApiPath) {
         // ensure single occurrence of this listener
         ckEditor.setAttribute('emojiCommandListener', 'true');
         ckEditor.addEventListener('keydown', function (e) {
-            var _a;
             // put listener on submit button if not already there
             const footerElement = ckEditor.closest('.ts-new-message-footer');
             if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
@@ -399,9 +408,7 @@ function inject(emojiApiPath) {
                     // replace emoji text with hidden div & the emoji image
                     if (ckEditor.innerHTML && validEmojis.indexOf(plainCommand) != -1) {
                         event.preventDefault();
-                        ckEditor.innerHTML = (_a = ckEditor
-                            .innerHTML) === null || _a === void 0 ? void 0 : _a.replace(commandText, '<span style="display:none">' + commandText + ':</span>' +
-                            '<img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/' + commandText.replace(':', '') + '">');
+                        emojifyInput(ckEditor, `${commandText}:`);
                         // Put cursor after emoji just created somehow
                     }
                 }
