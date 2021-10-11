@@ -50,8 +50,8 @@ function inject(emojiApiPath) {
     //       processData: false,
     //       contentType: "application/json",
     //       success: () => resolve(),
-    //     });
-    //   });
+    //     })
+    //   })
     // }
     function getMessageContentList() {
         return $(".message-body-content > div:not(." + emojiClass + ")").toArray();
@@ -81,7 +81,7 @@ function inject(emojiApiPath) {
         }
     }
     var emojiClass = "EMOJIFIER-CHECKED";
-    var emojiMatch = /:([\w-]+):/g;
+    var emojiMatch = /:([\w-_]+):/g;
     function injectEmojiImages(inputText, validEmojis, emojisUsed) {
         var resultStr = "";
         var matches = inputText.matchAll(emojiMatch);
@@ -97,7 +97,7 @@ function inject(emojiApiPath) {
             }
             resultStr += inputText.substring(currentIndexInInput, match.value.index);
             resultStr += reInjectText;
-            if (match.value.index)
+            if (match.value.index != undefined)
                 currentIndexInInput = match.value.index + match.value[0].length;
         }
         resultStr += inputText.substring(currentIndexInInput, inputText.length);
@@ -105,7 +105,7 @@ function inject(emojiApiPath) {
             //a characer of some sort is requred to get emoji at the end of a message to display correctly
             // don't ask me why
             // also don't ask me why it's not needed anymore
-            // resultStr += '&nbsp;';
+            // resultStr += '&nbsp;'
         }
         return resultStr;
     }
@@ -158,7 +158,7 @@ function inject(emojiApiPath) {
         let emojiFilterChangeListeners = [];
         const onClose = (event) => {
             // FIXME
-            //filterBox.value = "";
+            //filterBox.value = ""
             emojiFilterChangeListeners.forEach((onchange) => { if (onchange)
                 onchange(""); });
             closeListener(event);
@@ -306,8 +306,112 @@ function inject(emojiApiPath) {
         style.setAttribute("style", "text/css");
         document.getElementsByTagName("HEAD")[0].appendChild(style);
     }
+    const hiddenEmojiMatch = /<span style="display:none">(.*?)<\/span>/g;
+    const emojiImageMatch = /<img class="emoji-img".*?>/g;
+    /**
+     * Handle inline typing of emojis, i.e. :foobar:
+     *
+     * When emoji typing is complete, put that text into a hidden div and put an img tag with the
+     * emoji itself in the editor. Teams can't handle the img tag when submitted, so remove it when
+     * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
+     * subsequently displayed
+     */
+    function setEmojiEventListener(ckEditor, validEmojis) {
+        // ensure single occurrence of this listener
+        ckEditor.setAttribute('emojiCommandListener', 'true');
+        ckEditor.addEventListener('keydown', function (e) {
+            var _a;
+            // put listener on submit button if not already there
+            const footerElement = ckEditor.closest('.ts-new-message-footer');
+            if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
+                footerElement.setAttribute('emojiSubmitListener', 'true');
+                const extensionIconsContainerElement = footerElement.nextElementSibling;
+                if (extensionIconsContainerElement) {
+                    const button = extensionIconsContainerElement.querySelector('.icons-send.inset-border');
+                    if (button) {
+                        button.addEventListener('mousedown', function (e) {
+                            // TODO: consolidate this with the other similar logic
+                            if (ckEditor.innerHTML) {
+                                const matches = ckEditor.innerHTML.matchAll(hiddenEmojiMatch);
+                                let match;
+                                let resultStr = "";
+                                let currentIndexInInput = 0;
+                                while (!(match = matches.next()).done) {
+                                    resultStr += ckEditor.innerHTML.substring(currentIndexInInput, match.value.index);
+                                    resultStr += match.value[1];
+                                    if (match.value.index != undefined)
+                                        currentIndexInInput = match.value.index + match.value[0].length;
+                                }
+                                resultStr += ckEditor.innerHTML.substring(currentIndexInInput, ckEditor.innerHTML.length);
+                                const imgMatches = resultStr.matchAll(emojiImageMatch);
+                                let resultStr2 = "";
+                                currentIndexInInput = 0;
+                                while (!(match = imgMatches.next()).done) {
+                                    resultStr2 += resultStr.substring(currentIndexInInput, match.value.index);
+                                    if (match.value.index != undefined)
+                                        currentIndexInInput = match.value.index + match.value[0].length;
+                                }
+                                ckEditor.innerHTML = resultStr2;
+                            }
+                        });
+                    }
+                }
+            }
+            // handle emoji "command"
+            const event = e;
+            let commandText = ckEditor.getAttribute('emojiCommandText');
+            if (commandText === null) {
+                // start emoji command
+                if (event.key === ":")
+                    ckEditor.setAttribute('emojiCommandText', event.key);
+            }
+            else {
+                // add to command
+                if (event.key.match(/^[a-z0-9_]$/i)) {
+                    ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key));
+                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) >= 3) {
+                        // we have at least two letters. open (or keep open) inline search
+                        console.log('pop open');
+                    }
+                }
+                // remove from command
+                if (event.key == "Backspace") {
+                    const text = commandText === null || commandText === void 0 ? void 0 : commandText.slice(0, -1);
+                    if (!text) {
+                        // end command (first ':' removed)
+                        ckEditor.removeAttribute('emojiCommandText');
+                    }
+                    else {
+                        // remove letter from command
+                        ckEditor.setAttribute('emojiCommandText', (commandText = text));
+                    }
+                    // close inline search - need at least two letters to search
+                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 2) {
+                        console.log('close');
+                    }
+                }
+                // end command
+                if (event.key === ':') {
+                    ckEditor.removeAttribute('emojiCommandText');
+                    // close inline search
+                    console.log('close');
+                    const plainCommand = commandText.replace(':', '');
+                    // replace emoji text with hidden div & the emoji image
+                    if (ckEditor.innerHTML && validEmojis.indexOf(plainCommand) != -1) {
+                        event.preventDefault();
+                        ckEditor.innerHTML = (_a = ckEditor
+                            .innerHTML) === null || _a === void 0 ? void 0 : _a.replace(commandText, '<span style="display:none">' + commandText + ':</span>' +
+                            '<img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/' + commandText.replace(':', '') + '">');
+                        // Put cursor after emoji just created somehow
+                    }
+                }
+            }
+        });
+    }
     function init() {
         // Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
+        // @ts-ignore
+        teamspace.services.EmoticonPickerHandler.prototype.handleText = function () { };
         // @ts-ignore
         teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function () { };
         injectCSS(CssInject);
@@ -319,14 +423,22 @@ function inject(emojiApiPath) {
                 var messageList = getMessageContentList();
                 messageList.forEach((div) => emojifyMessageDiv(div, emojis, emojisUsed));
                 injectPreviewButtons(emojis);
-            }, 2000);
+                var ckEditors = document.getElementsByClassName('cke_wysiwyg_div');
+                for (let ckEditor of ckEditors) {
+                    ckEditor = ckEditor;
+                    if (ckEditor.getAttribute('emojiCommandListener') === null) {
+                        // TODO refresh emojis from time to time
+                        setEmojiEventListener(ckEditor, emojis);
+                    }
+                }
+            }, 1000);
             // setInterval(() => {
             //   if (Object.keys(emojisUsed).length <= 0) {
-            //     return;
+            //     return
             //   }
-            //   postEmojiUsages(emojisUsed).then((posted) => {});
-            //   emojisUsed = {};
-            // }, 10000);
+            //   postEmojiUsages(emojisUsed).then((posted) => {})
+            //   emojisUsed = {}
+            // }, 10000)
         });
     }
     init();
