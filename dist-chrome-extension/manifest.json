@@ -12,9 +12,8 @@
         "https://teams.microsoft.com/*"
       ],
       "run_at": "document_idle",
-      "js": [
-        "payload.js"
-      ]
+      "js": ["payload.js"],
+			"css": ["emojifier.css"]
     }
   ],
   "icons": {

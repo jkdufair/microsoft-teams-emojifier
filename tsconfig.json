@@ -3,6 +3,7 @@
 		"target": "es6",
 		"module": "esnext",
 		"outDir": "dist-chrome-extension",
+		"sourceMap": true,
 		"lib": [
 			"esnext",
 			"DOM",

@@ -1,5 +1,7 @@
 "use strict";
-//Make sure the payload is injected only once per context at most
+// Make sure the payload is injected only once per context at most
+// Lots types we don't have for this stuff so we're ignoring it
+// TODO - look into how to do this more typescript-y
 // @ts-ignore
 if (window.SECRET_EMOJI_KEY != "set") {
     // @ts-ignore
@@ -101,12 +103,6 @@ function inject(emojiApiPath) {
                 currentIndexInInput = match.value.index + match.value[0].length;
         }
         resultStr += inputText.substring(currentIndexInInput, inputText.length);
-        if (!resultStr.endsWith("&nbsp;")) {
-            //a characer of some sort is requred to get emoji at the end of a message to display correctly
-            // don't ask me why
-            // also don't ask me why it's not needed anymore
-            // resultStr += '&nbsp;'
-        }
         return resultStr;
     }
     function emojifyMessageDiv(div, validEmojis, emojisUsed) {
@@ -116,17 +112,52 @@ function inject(emojiApiPath) {
         div.classList.add(emojiClass);
     }
     function emojifyInput(element, text, insert = false) {
-        // text is expected to be the whole command, i.e. :foobar:
-        const stealthMoji = `<span style="display:none">${text}</span><img class="emoji-img" src="https://emoji-server.azurewebsites.net/emoji/${text.replaceAll(':', '')}">`;
-        if (insert)
-            element.innerHTML += stealthMoji;
-        else
-            // The text in the input when typing in by hand won't have the final colon since we are intercepting
-            // the event. This is my attempt at making that replacement readable
-            element.innerHTML = element.innerHTML.replace(`:${text.replaceAll(':', '')}`, stealthMoji);
+        // TODO typing emoji does not add a space after, but clicking in grid does
+        // text is expected to be the command without the colons, i.e. foobar not :foobar:
+        element.focus();
+        let selection = window.getSelection();
+        let commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
+        if (selection && selection.anchorNode && commandRange && !insert) {
+            const caretPosition = commandRange.endOffset;
+            commandRange.setStart(selection.anchorNode, caretPosition - text.length - 1);
+            commandRange.setEnd(selection.anchorNode, caretPosition);
+            commandRange.deleteContents();
+        }
+        if (commandRange) {
+            const emojiImage = document.createElement('img');
+            emojiImage.classList.add('emoji-img');
+            emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${text.replaceAll(':', '')}`;
+            commandRange.insertNode(emojiImage);
+            const hiddenSpan = document.createElement('span');
+            hiddenSpan.style.display = "none";
+            hiddenSpan.textContent = `:${text}:`;
+            commandRange.insertNode(hiddenSpan);
+        }
+        selection = window.getSelection();
+        commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
+        if (selection && commandRange) {
+            commandRange.collapse();
+        }
+    }
+    function unemojifyInput(ckEditor) {
+        if (ckEditor.innerHTML) {
+            const matches = ckEditor.innerHTML.matchAll(hiddenEmojiMatch);
+            let match;
+            let resultStr = "";
+            let currentIndexInInput = 0;
+            while (!(match = matches.next()).done) {
+                resultStr += ckEditor.innerHTML.substring(currentIndexInInput, match.value.index);
+                resultStr += match.value[1];
+                if (match.value.index != undefined)
+                    currentIndexInInput = match.value.index + match.value[0].length;
+            }
+            resultStr += ckEditor.innerHTML.substring(currentIndexInInput, ckEditor.innerHTML.length);
+            ckEditor.innerHTML = resultStr;
+        }
     }
     function typeInInput(text) {
         var _a;
+        // TODO: if two editors open, can insert into the wrong one
         const editorWindow = document.getElementsByClassName("ts-edit-box").item(0);
         if (editorWindow) {
             const textContainer = (_a = editorWindow.getElementsByClassName("cke_editable")
@@ -134,7 +165,7 @@ function inject(emojiApiPath) {
             if (textContainer) {
                 if (textContainer.innerHTML.includes("br"))
                     textContainer.innerHTML = "";
-                emojifyInput(textContainer, text, true);
+                emojifyInput(textContainer.parentElement, text, true);
             }
         }
     }
@@ -179,7 +210,8 @@ function inject(emojiApiPath) {
             emojiTableContainer.scrollTop = emojiTableContainer.scrollHeight;
         }, 500, (selectedFilter) => {
             var emoji = emojiList.find((emoji) => emoji.includes(selectedFilter));
-            emojiSelectedListener(null, emoji);
+            if (emoji)
+                emojiSelectedListener(null, emoji);
             onClose();
         });
         emojiFilterChangeListeners = emojiList.map((emoji) => {
@@ -240,7 +272,7 @@ function inject(emojiApiPath) {
             buttonContainer.replaceChild(emojiCloned, previousPreviewButton);
         var open = false;
         var { element: emojiTable, onOpen, onClose, } = createEmojiGrid(emojiList, (_, emoji) => {
-            typeInInput(":" + emoji + ":");
+            typeInInput(emoji);
         }, (_) => {
             emojiTable.style.display = "none";
             open = false;
@@ -258,66 +290,7 @@ function inject(emojiApiPath) {
             }
         });
     }
-    var CssInject = `
-.emoji-img {
-    height: 24px !important;
-    width: 24px !important;
-    display: inline-block;
-    position: static !important;
-}
-.emoji-flex-table > .emoji-img {
-    margin: 6px 4px;
-}
-.emoji-popup input {
-    width: 100%;
-    border: 2px solid #ccc;
-    height: 3rem;
-}
-.emoji-popup {
-    background: #FFF;
-    position: absolute;
-    z-index: 1000;
-    left: 100px;
-    bottom: 30px;
-    font-size: 1.4rem;
-    display: none;
-    color: black;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-shadow: 0 0 0 1px rgb(232 232 232 / 13%), 0 4px 12px 0 rgb(0 0 0 / 8%);
-    padding-top: 4px;
-}
-.emoji-flex-table {
-    display: flex;
-    flex-flow: row wrap-reverse;
-    justify-content: flex-start;
-    align-items: flex-end;
-    width: 300px;
-}
-.emoji-flex-table-container {
-    max-height: 294px;
-    padding: 12px 0 6px 6px;
-    overflow-y: scroll;
-}
-.emoji-flex-table-container::-webkit-scrollbar {
-    display: none;
-}
-.emoji-flex-table .emoji-img {
-    cursor: pointer;
-}
-#emoji-input-box-container {
-    padding: 8px 12px 10px 12px;
-    border-top: 1px solid #ccc;
-}
-`;
-    function injectCSS(inputCss) {
-        var style = document.createElement("style");
-        style.innerHTML = inputCss;
-        style.setAttribute("style", "text/css");
-        document.getElementsByTagName("HEAD")[0].appendChild(style);
-    }
-    const hiddenEmojiMatch = /<span style="display:none">(.*?)<\/span>/g;
-    const emojiImageMatch = /<img class="emoji-img".*?>/g;
+    const hiddenEmojiMatch = /<span style="display: none;">(.*?)<\/span><img class="emoji-img".*?>/g;
     /**
      * Handle inline typing of emojis, i.e. :foobar:
      *
@@ -338,36 +311,18 @@ function inject(emojiApiPath) {
                 if (extensionIconsContainerElement) {
                     const button = extensionIconsContainerElement.querySelector('.icons-send.inset-border');
                     if (button) {
-                        button.addEventListener('mousedown', function (e) {
-                            // TODO: consolidate this with the other similar logic
-                            if (ckEditor.innerHTML) {
-                                const matches = ckEditor.innerHTML.matchAll(hiddenEmojiMatch);
-                                let match;
-                                let resultStr = "";
-                                let currentIndexInInput = 0;
-                                while (!(match = matches.next()).done) {
-                                    resultStr += ckEditor.innerHTML.substring(currentIndexInInput, match.value.index);
-                                    resultStr += match.value[1];
-                                    if (match.value.index != undefined)
-                                        currentIndexInInput = match.value.index + match.value[0].length;
-                                }
-                                resultStr += ckEditor.innerHTML.substring(currentIndexInInput, ckEditor.innerHTML.length);
-                                const imgMatches = resultStr.matchAll(emojiImageMatch);
-                                let resultStr2 = "";
-                                currentIndexInInput = 0;
-                                while (!(match = imgMatches.next()).done) {
-                                    resultStr2 += resultStr.substring(currentIndexInInput, match.value.index);
-                                    if (match.value.index != undefined)
-                                        currentIndexInInput = match.value.index + match.value[0].length;
-                                }
-                                ckEditor.innerHTML = resultStr2;
-                            }
+                        button.addEventListener('mousedown', function () {
+                            unemojifyInput(ckEditor);
                         });
                     }
                 }
             }
-            // handle emoji "command"
             const event = e;
+            // Submitting form - unemojify commands
+            if (event.key === 'Enter') {
+                unemojifyInput(ckEditor);
+            }
+            // handle emoji "command"
             let commandText = ckEditor.getAttribute('emojiCommandText');
             if (commandText === null) {
                 // start emoji command
@@ -408,8 +363,7 @@ function inject(emojiApiPath) {
                     // replace emoji text with hidden div & the emoji image
                     if (ckEditor.innerHTML && validEmojis.indexOf(plainCommand) != -1) {
                         event.preventDefault();
-                        emojifyInput(ckEditor, `${commandText}:`);
-                        // Put cursor after emoji just created somehow
+                        emojifyInput(ckEditor, plainCommand);
                     }
                 }
             }
@@ -421,7 +375,6 @@ function inject(emojiApiPath) {
         teamspace.services.EmoticonPickerHandler.prototype.handleText = function () { };
         // @ts-ignore
         teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function () { };
-        injectCSS(CssInject);
         console.log("fetching valid emojis from " + emojiApiPath);
         getValidEmojis().then((emojis) => {
             console.log(emojis);
@@ -431,11 +384,11 @@ function inject(emojiApiPath) {
                 messageList.forEach((div) => emojifyMessageDiv(div, emojis, emojisUsed));
                 injectPreviewButtons(emojis);
                 var ckEditors = document.getElementsByClassName('cke_wysiwyg_div');
-                for (let ckEditor of ckEditors) {
-                    ckEditor = ckEditor;
-                    if (ckEditor.getAttribute('emojiCommandListener') === null) {
+                for (const ckEditor of ckEditors) {
+                    const cke = ckEditor;
+                    if (cke.getAttribute('emojiCommandListener') === null) {
                         // TODO refresh emojis from time to time
-                        setEmojiEventListener(ckEditor, emojis);
+                        setEmojiEventListener(cke, emojis);
                     }
                 }
             }, 1000);
@@ -450,3 +403,4 @@ function inject(emojiApiPath) {
     }
     init();
 }
+//# sourceMappingURL=payload.js.map
