@@ -37,6 +37,10 @@ if (window.SECRET_EMOJI_KEY != "set") {
     }
 }
 function inject(emojiApiPath) {
+    const emojiClass = "EMOJIFIER-CHECKED";
+    const emojiMatch = /:([\w-_]+):/g;
+    const miniPopupClassName = 'emoji-inline-popup';
+    const hiddenEmojiMatch = /<span style="display: none;">(.*?)<\/span><img class="emoji-img".*?>/g;
     function getValidEmojis() {
         return new Promise((resolve, _) => {
             $.get(emojiApiPath + "/emojis", (result) => {
@@ -82,8 +86,6 @@ function inject(emojiApiPath) {
             crawlTree(htmlChildElement, handleLeaf);
         }
     }
-    var emojiClass = "EMOJIFIER-CHECKED";
-    var emojiMatch = /:([\w-_]+):/g;
     function injectEmojiImages(inputText, validEmojis, emojisUsed) {
         var resultStr = "";
         var matches = inputText.matchAll(emojiMatch);
@@ -111,26 +113,27 @@ function inject(emojiApiPath) {
         });
         div.classList.add(emojiClass);
     }
-    function emojifyInput(element, text, insert = false) {
+    function emojifyInput(element, commandText, emoji) {
         // TODO typing emoji does not add a space after, but clicking in grid does
         // text is expected to be the command without the colons, i.e. foobar not :foobar:
         element.focus();
         let selection = window.getSelection();
         let commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
-        if (selection && selection.anchorNode && commandRange && !insert) {
+        if (selection && selection.anchorNode && commandRange && commandText) {
             const caretPosition = commandRange.endOffset;
-            commandRange.setStart(selection.anchorNode, caretPosition - text.length - 1);
+            console.log('caretPosition: ', caretPosition);
+            commandRange.setStart(selection.anchorNode, caretPosition - commandText.length);
             commandRange.setEnd(selection.anchorNode, caretPosition);
             commandRange.deleteContents();
         }
         if (commandRange) {
             const emojiImage = document.createElement('img');
             emojiImage.classList.add('emoji-img');
-            emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${text.replaceAll(':', '')}`;
+            emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${emoji.replaceAll(':', '')}`;
             commandRange.insertNode(emojiImage);
             const hiddenSpan = document.createElement('span');
             hiddenSpan.style.display = "none";
-            hiddenSpan.textContent = `:${text}:`;
+            hiddenSpan.textContent = `:${emoji}:`;
             commandRange.insertNode(hiddenSpan);
         }
         selection = window.getSelection();
@@ -165,7 +168,7 @@ function inject(emojiApiPath) {
             if (textContainer) {
                 if (textContainer.innerHTML.includes("br"))
                     textContainer.innerHTML = "";
-                emojifyInput(textContainer.parentElement, text, true);
+                emojifyInput(textContainer.parentElement, null, text);
             }
         }
     }
@@ -290,19 +293,57 @@ function inject(emojiApiPath) {
             }
         });
     }
-    const hiddenEmojiMatch = /<span style="display: none;">(.*?)<\/span><img class="emoji-img".*?>/g;
-    /**
-     * Handle inline typing of emojis, i.e. :foobar:
-     *
-     * When emoji typing is complete, put that text into a hidden div and put an img tag with the
-     * emoji itself in the editor. Teams can't handle the img tag when submitted, so remove it when
-     * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
-     * subsequently displayed
-     */
-    function setEmojiEventListener(ckEditor, validEmojis) {
-        // ensure single occurrence of this listener
-        ckEditor.setAttribute('emojiCommandListener', 'true');
-        ckEditor.addEventListener('keydown', function (e) {
+    function createMiniPopup(emojiList, emojiSelectedListener, closeListener) {
+        const popup = document.createElement('div');
+        popup.classList.add(miniPopupClassName);
+        let emojiFilterChangeListeners = [];
+        const onClose = (event) => {
+            emojiFilterChangeListeners.forEach(onchange => { if (onchange)
+                onchange(""); });
+            closeListener(event);
+        };
+        let filter = "";
+        emojiFilterChangeListeners = emojiList.map((emoji) => {
+            const emojiElement = createElementFromHTML(createImgTag(emoji));
+            if (emojiElement) {
+                emojiElement.addEventListener("click", (event) => {
+                    emojiSelectedListener(event, `:${filter}`, emoji);
+                    onClose(event);
+                });
+                popup.appendChild(emojiElement);
+                return (newFilter) => {
+                    filter = newFilter;
+                    //TODO: why is this executing once for every emoji?
+                    emojiElement.style.display = filterEmoji(emoji, newFilter)
+                        ? "block"
+                        : "none";
+                };
+            }
+        });
+        const onOpen = () => {
+            popup.style.display = "block";
+        };
+        return {
+            element: popup,
+            onOpen,
+            onClose,
+            emojiFilterChangeListeners
+        };
+    }
+    function injectMiniPopup(ckEditor, emojiList) {
+        var _a, _b;
+        ckEditor.classList.add(emojiClass);
+        const { element: miniPopup, onOpen, onClose, emojiFilterChangeListeners } = createMiniPopup(emojiList, (_, commandText, emoji) => {
+            emojifyInput(ckEditor, commandText, emoji);
+        }, (_) => {
+            // TODO: not sure this is necessary
+            miniPopup.style.display = "none";
+            ckEditor.removeAttribute('emojiCommandText');
+        });
+        if (((_a = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector(`.${miniPopupClassName}`)) === null) {
+            (_b = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _b === void 0 ? void 0 : _b.insertBefore(miniPopup, ckEditor);
+        }
+        ckEditor.addEventListener("keydown", function (e) {
             // put listener on submit button if not already there
             const footerElement = ckEditor.closest('.ts-new-message-footer');
             if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
@@ -324,6 +365,10 @@ function inject(emojiApiPath) {
             }
             // handle emoji "command"
             let commandText = ckEditor.getAttribute('emojiCommandText');
+            ckEditor.parentElement.style.overflow = "visible";
+            for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
+                element.style.overflow = "visible";
+            }
             if (commandText === null) {
                 // start emoji command
                 if (event.key === ":")
@@ -332,10 +377,12 @@ function inject(emojiApiPath) {
             else {
                 // add to command
                 if (event.key.match(/^[a-z0-9_]$/i)) {
+                    emojiFilterChangeListeners.forEach(onchange => { if (onchange)
+                        onchange((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key); });
                     ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key));
-                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) >= 3) {
-                        // we have at least two letters. open (or keep open) inline search
-                        console.log('pop open');
+                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 3) {
+                        // we have at least two letters. open inline search
+                        onOpen();
                     }
                 }
                 // remove from command
@@ -349,25 +396,42 @@ function inject(emojiApiPath) {
                         // remove letter from command
                         ckEditor.setAttribute('emojiCommandText', (commandText = text));
                     }
+                    emojiFilterChangeListeners.forEach(onchange => {
+                        if (onchange && commandText)
+                            onchange(commandText.replace(':', ''));
+                    });
                     // close inline search - need at least two letters to search
                     if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 2) {
-                        console.log('close');
+                        onClose();
                     }
                 }
                 // end command
                 if (event.key === ':') {
                     ckEditor.removeAttribute('emojiCommandText');
-                    // close inline search
-                    console.log('close');
+                    onClose();
                     const plainCommand = commandText.replace(':', '');
                     // replace emoji text with hidden div & the emoji image
-                    if (ckEditor.innerHTML && validEmojis.indexOf(plainCommand) != -1) {
+                    if (ckEditor.innerHTML && emojiList.indexOf(plainCommand) != -1) {
                         event.preventDefault();
-                        emojifyInput(ckEditor, plainCommand);
+                        emojifyInput(ckEditor, commandText, plainCommand);
                     }
                 }
             }
         });
+    }
+    /**
+     * Handle inline typing of emojis, i.e. :foobar:
+     *
+     * When emoji typing is complete, put that text into a hidden div and put an img tag with the
+     * emoji itself in the editor. Teams can't handle the img tag when submitted, so remove it when
+     * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
+     * subsequently displayed
+     */
+    function setEmojiEventListener(ckEditor, validEmojis) {
+        // ensure single occurrence of this listener
+        ckEditor.setAttribute('emojiCommandListener', 'true');
+        injectMiniPopup(ckEditor, validEmojis);
+        //ckEditor.addEventListener('keydown', )
     }
     function init() {
         // Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
