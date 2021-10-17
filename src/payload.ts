@@ -1,5 +1,33 @@
-// Make sure the payload is injected only once per context at most
+// Mini-popup
+// TODO: Re-popup after close not working
+// TODO: Rename to inline popup
+// TODO: If height < 250px when filtering, position top accordingly so it's still right above text
+// TODO: Keyboard control - up, down, enter/tab, escape
+// TODO: Close if click outside
+// TODO: Don't cut off in replies
+// TODO: Fuzzy filter
+// TODO: Display emoji name
 
+// Features
+// TODO: Use mutation observer vs. hacky timer & attributes
+// TODO: Style grid popup a bit nicer
+// TODO: Reactions
+// TODO: Background fetch on launch
+// TODO: Websocket push when new emoji added
+// TODO: Load some/all basic emojis into server
+// TODO: Fix electron install
+// TODO: Large emoji when no text
+// TODO: Simple URL-based auth for server to keep out the riffraff
+// TODO: Add emojis with (image)+:emojiname:
+
+// Housekeeping
+// TODO: eslint
+
+// Bugs
+// TODO: Clicking and inserting two subsequent emoji from grid inserts n+1 before cursor
+
+
+// Make sure the payload is injected only once per context at most
 // Lots types we don't have for this stuff so we're ignoring it
 // TODO - look into how to do this more typescript-y
 // @ts-ignore
@@ -9,8 +37,6 @@ if (window.SECRET_EMOJI_KEY != "set") {
 	// @ts-ignore
 	if (window.EMOJI_API) {
 		// if this is an injection into the electron app
-		// @ts-ignore
-		console.log("EMOJI API SET:" + window.EMOJI_API)
 		setTimeout(() => {
 			// @ts-ignore
 			inject(window.EMOJI_API, window)
@@ -133,22 +159,21 @@ function inject(emojiApiPath: string | undefined) {
 		div.classList.add(emojiClass)
 	}
 
-	function emojifyInput(element: HTMLElement, commandText: string | null, emoji: string) {
-		// TODO typing emoji does not add a space after, but clicking in grid does
+	function emojifyInput(ckEditor: HTMLDivElement, commandText: string | null, emoji: string) {
 		// text is expected to be the command without the colons, i.e. foobar not :foobar:
-		(element as HTMLElement).focus()
+		ckEditor.focus()
 		let selection = window.getSelection()
 		let commandRange = selection?.getRangeAt(0)
 
-		if (selection && selection.anchorNode && commandRange && commandText) {
-			const caretPosition = commandRange.endOffset
-			console.log('caretPosition: ', caretPosition)
-			commandRange.setStart(selection.anchorNode, caretPosition - commandText.length)
-			commandRange.setEnd(selection.anchorNode, caretPosition)
-			commandRange.deleteContents()
-		}
-
 		if (commandRange) {
+			// delete any part of command that was typed (i.e. :lun or :lunch)
+			if (selection && selection.anchorNode && commandText) {
+				const caretPosition = commandRange.endOffset
+				commandRange.setStart(selection.anchorNode, caretPosition - commandText.length)
+				commandRange.setEnd(selection.anchorNode, caretPosition)
+				commandRange.deleteContents()
+			}
+
 			const emojiImage = document.createElement('img')
 			emojiImage.classList.add('emoji-img')
 			emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${emoji.replaceAll(':', '')}`
@@ -160,9 +185,10 @@ function inject(emojiApiPath: string | undefined) {
 			commandRange.insertNode(hiddenSpan)
 		}
 
+		// Put cursor after emoji
 		selection = window.getSelection()
 		commandRange = selection?.getRangeAt(0)
-		if (selection && commandRange) {
+		if (commandRange) {
 			commandRange.collapse()
 		}
 	}
@@ -181,20 +207,6 @@ function inject(emojiApiPath: string | undefined) {
 			}
 			resultStr += ckEditor.innerHTML.substring(currentIndexInInput, ckEditor.innerHTML.length)
 			ckEditor.innerHTML = resultStr
-		}
-	}
-
-	function typeInInput(text: string) {
-		// TODO: if two editors open, can insert into the wrong one
-		const editorWindow = document.getElementsByClassName("ts-edit-box").item(0)
-		if (editorWindow) {
-			const textContainer = editorWindow.getElementsByClassName("cke_editable")
-				.item(0)?.firstElementChild as HTMLDivElement
-			if (textContainer) {
-				if (textContainer.innerHTML.includes("br"))
-					textContainer.innerHTML = ""
-				emojifyInput(textContainer.parentElement as HTMLElement, null, text)
-			}
 		}
 	}
 
@@ -332,7 +344,9 @@ function inject(emojiApiPath: string | undefined) {
 		} = createEmojiGrid(
 			emojiList,
 			(_: Event | null, emoji: string) => {
-				typeInInput(emoji)
+				const ckEditor = (buttonContainer as HTMLElement)?.closest('.ts-new-message')?.querySelector('.cke_wysiwyg_div') as HTMLDivElement
+				if (ckEditor)
+					emojifyInput(ckEditor, null, emoji) 
 			},
 			(_) => {
 				emojiTable.style.display = "none"
@@ -378,7 +392,6 @@ function inject(emojiApiPath: string | undefined) {
 				popup.appendChild(emojiElement)
 				return (newFilter: string) => {
 					filter = newFilter
-					//TODO: why is this executing once for every emoji?
 					emojiElement.style.display = filterEmoji(emoji, newFilter)
 						? "block"
 						: "none"
@@ -398,7 +411,7 @@ function inject(emojiApiPath: string | undefined) {
 		}		
 }
 
-	function injectMiniPopup(ckEditor: HTMLElement, emojiList: string[]) {
+	function injectMiniPopup(ckEditor: HTMLDivElement, emojiList: string[]) {
 		ckEditor.classList.add(emojiClass)
 		const {
 			element: miniPopup,
@@ -411,8 +424,6 @@ function inject(emojiApiPath: string | undefined) {
 				emojifyInput(ckEditor, commandText, emoji)
 			},
 			(_) => {
-				// TODO: not sure this is necessary
-				miniPopup.style.display = "none"
 				ckEditor.removeAttribute('emojiCommandText')
 			}
 		)
@@ -443,7 +454,14 @@ function inject(emojiApiPath: string | undefined) {
 				unemojifyInput(ckEditor)
 			}
 
-			// handle emoji "command"
+			/*
+			 * Handle inline typing of emojis, i.e. :foobar:
+			 *
+			 * When emoji typing is complete, put that text into a hidden div and put an img tag with the
+			 * emoji itself in the editor. Teams can't handle the img tag when submitted, so remove it when
+			 * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
+			 * subsequently displayed
+			 */
 			let commandText = ckEditor.getAttribute('emojiCommandText');
 			(ckEditor.parentElement as HTMLDivElement).style.overflow = "visible"
 			for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
@@ -499,24 +517,6 @@ function inject(emojiApiPath: string | undefined) {
 		})
 	}
 
-	/**
-	 * Handle inline typing of emojis, i.e. :foobar:
-	 *
-	 * When emoji typing is complete, put that text into a hidden div and put an img tag with the
-	 * emoji itself in the editor. Teams can't handle the img tag when submitted, so remove it when
-	 * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
-	 * subsequently displayed
-	 */
-	function setEmojiEventListener(ckEditor: HTMLElement, validEmojis: string[]) {
-		// ensure single occurrence of this listener
-		ckEditor.setAttribute('emojiCommandListener', 'true')
-		injectMiniPopup(ckEditor, validEmojis)
-
-
-		//ckEditor.addEventListener('keydown', )
-
-	}
-
 	function init() {
 		// Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
 		// @ts-ignore
@@ -524,9 +524,7 @@ function inject(emojiApiPath: string | undefined) {
 		// @ts-ignore
 		teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function() { }
 
-		console.log("fetching valid emojis from " + emojiApiPath)
 		getValidEmojis().then((emojis: string[]) => {
-			console.log(emojis)
 			var emojisUsed = {}
 			setInterval(() => {
 				var messageList = getMessageContentList()
@@ -537,10 +535,10 @@ function inject(emojiApiPath: string | undefined) {
 
 				var ckEditors = document.getElementsByClassName('cke_wysiwyg_div')
 				for (const ckEditor of ckEditors) {
-					const cke = ckEditor as HTMLElement
+					const cke = ckEditor as HTMLDivElement
 					if (cke.getAttribute('emojiCommandListener') === null) {
-						// TODO refresh emojis from time to time
-						setEmojiEventListener(cke, emojis)
+						ckEditor.setAttribute('emojiCommandListener', 'true')
+						injectMiniPopup(cke, emojis)
 					}
 				}
 			}, 1000)

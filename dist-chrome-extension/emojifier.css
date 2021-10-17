@@ -13,11 +13,11 @@
   height: 3rem;
 }
 .emoji-inline-popup {
-  background: #FFF;
   position: absolute;
+	top: -250px;
+	width: 500px;
+  background: #FFF;
   z-index: 1000;
-	left: 20px;
-  bottom: 90px;
   font-size: 1.4rem;
 	display: none;
   color: black;
@@ -26,7 +26,6 @@
   box-shadow: 0 0 0 1px rgb(232 232 232 / 13%), 0 4px 12px 0 rgb(0 0 0 / 8%);
 	max-height: 250px;
 	padding: 6px;
-	width: 400px;
 	overflow-y: scroll;
 }
 .emoji-popup {
