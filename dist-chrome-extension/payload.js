@@ -1,12 +1,9 @@
 "use strict";
 // Mini-popup
-// TODO: Re-popup after close not working
-// TODO: Rename to inline popup
-// TODO: Keyboard control - up, down, enter/tab, escape
+// TODO: Keyboard control - up, down, enter/tab, escape & mouse hover
 // TODO: Close if click outside
 // TODO: Don't cut off in replies
-// TODO: Fuzzy filter
-// TODO: Display emoji name
+// TODO: Fuzzy filter & highlight fuzzy matches
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
@@ -17,11 +14,15 @@
 // TODO: Fix electron install
 // TODO: Large emoji when no text
 // TODO: Simple URL-based auth for server to keep out the riffraff
-// TODO: Add emojis with (image)+:emojiname:
+// TODO: Add emojis to server with "{pasted image}+:emojiname:"
+// TODO: alt text & popover for emojis
 // Housekeeping
 // TODO: eslint
+// TODO: SASS/LESS
+// TODO: webpack
 // Bugs
-// TODO: Clicking and inserting two subsequent emoji from grid inserts n+1 before cursor
+// TODO: Clicking and inserting two subsequent emoji from grid inserts second
+//   (and subsequent) emojis before cursor
 // Make sure the payload is injected only once per context at most
 // Lots types we don't have for this stuff so we're ignoring it
 // TODO - look into how to do this more typescript-y
@@ -303,51 +304,77 @@ function inject(emojiApiPath) {
             }
         });
     }
-    function createMiniPopup(emojiList, emojiSelectedListener, closeListener) {
+    function createMiniPopup(emojiList, emojiSelectedListener) {
         const popup = document.createElement('div');
         popup.classList.add(miniPopupClassName);
-        let emojiFilterChangeListeners = [];
-        const onClose = (event) => {
-            emojiFilterChangeListeners.forEach(onchange => { if (onchange)
-                onchange(""); });
-            closeListener(event);
-            popup.style.display = "none";
-        };
         let filter = "";
-        emojiFilterChangeListeners = emojiList.map(emoji => {
+        let filteredEmojis = emojiList;
+        let selectedIndex = 0;
+        const emojiChangeListeners = emojiList.map(emoji => {
             const emojiElement = createElementFromHTML(createImgTag(emoji));
-            if (emojiElement) {
-                emojiElement.addEventListener("click", (event) => {
-                    emojiSelectedListener(event, `:${filter}`, emoji);
-                    onClose(event);
-                });
-                popup.appendChild(emojiElement);
-                return (newFilter) => {
-                    filter = newFilter;
-                    emojiElement.style.display = filterEmoji(emoji, newFilter)
-                        ? "block"
-                        : "none";
-                };
-            }
+            const span = document.createElement('span');
+            span.innerText = `:${emoji}:`;
+            const div = document.createElement('div');
+            div.classList.add('mini-popup-item');
+            div.appendChild(emojiElement);
+            div.appendChild(span);
+            emojiElement.addEventListener("click", (event) => {
+                emojiSelectedListener(event, `:${filter}`, emoji);
+                onClose();
+            });
+            popup.appendChild(div);
+            const filterHandler = (toFilter) => {
+                // save the filter in the outer scope for deleting from the ckEditor
+                if (filter !== toFilter)
+                    filter = toFilter;
+                div.style.display = filterEmoji(emoji, toFilter)
+                    ? "block"
+                    : "none";
+            };
+            const selectionHandler = (index) => {
+                if (filteredEmojis.indexOf(emoji) == index)
+                    div.classList.add('selected');
+                else
+                    div.classList.remove('selected');
+            };
+            return {
+                filterHandler,
+                selectionHandler
+            };
         });
         const onOpen = () => {
             popup.style.display = "block";
+        };
+        const onClose = () => {
+            emojiChangeListeners.forEach(handlers => { handlers.filterHandler(""); });
+            popup.style.display = "none";
+        };
+        const onFilter = (toFilter) => {
+            filteredEmojis = emojiList.filter(e => e.includes(toFilter));
+            filter = toFilter;
+            emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter); });
+            onSelect(0);
+        };
+        const onSelect = (index) => {
+            emojiChangeListeners.forEach(handlers => { handlers.selectionHandler(index); });
+            selectedIndex = index;
         };
         return {
             element: popup,
             onOpen,
             onClose,
-            emojiFilterChangeListeners
+            onFilter,
+            onSelect
         };
     }
     function injectMiniPopup(ckEditor, emojiList) {
         var _a, _b;
         ckEditor.classList.add(emojiClass);
-        const { element: miniPopup, onOpen, onClose, emojiFilterChangeListeners } = createMiniPopup(emojiList, (_, commandText, emoji) => {
+        const { element: miniPopup, onOpen, onClose, onFilter, onSelect } = createMiniPopup(emojiList, (_, commandText, emoji) => {
             emojifyInput(ckEditor, commandText, emoji);
-        }, (_) => {
             ckEditor.removeAttribute('emojiCommandText');
         });
+        // inject the mini popup as a sibling before the ckEditor component
         if (((_a = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector(`.${miniPopupClassName}`)) === null) {
             (_b = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _b === void 0 ? void 0 : _b.insertBefore(miniPopup, ckEditor);
         }
@@ -392,10 +419,7 @@ function inject(emojiApiPath) {
             else {
                 // add to command
                 if (event.key.match(/^[a-z0-9_]$/i)) {
-                    emojiFilterChangeListeners.forEach(onchange => {
-                        if (onchange)
-                            onchange((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key);
-                    });
+                    onFilter((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key);
                     ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key));
                     if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 3) {
                         // we have at least two letters. open inline search
@@ -413,10 +437,7 @@ function inject(emojiApiPath) {
                         // remove letter from command
                         ckEditor.setAttribute('emojiCommandText', (commandText = text));
                     }
-                    emojiFilterChangeListeners.forEach(onchange => {
-                        if (onchange && commandText)
-                            onchange(commandText.replace(':', ''));
-                    });
+                    onFilter(commandText.replace(':', ''));
                     // close inline search - need at least two letters to search
                     if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 2) {
                         onClose();

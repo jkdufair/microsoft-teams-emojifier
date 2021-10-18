@@ -25,8 +25,21 @@
   border-radius: 6px;
   box-shadow: 0 0 0 1px rgb(232 232 232 / 13%), 0 4px 12px 0 rgb(0 0 0 / 8%);
 	max-height: 250px;
-	padding: 6px;
-	overflow-y: scroll;
+	padding: 6px 0;
+	overflow-y: auto;
+}
+.mini-popup-item {
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+.mini-popup-item.selected {
+	background-color: #1264a3;
+	color: white;
+}
+
+.emoji-inline-popup .emoji-img {
+	margin-left: 10px;
+	margin-right: 6px
 }
 .emoji-popup {
   background: #FFF;
