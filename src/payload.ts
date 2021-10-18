@@ -1,7 +1,6 @@
 // Mini-popup
 // TODO: Re-popup after close not working
 // TODO: Rename to inline popup
-// TODO: If height < 250px when filtering, position top accordingly so it's still right above text
 // TODO: Keyboard control - up, down, enter/tab, escape
 // TODO: Close if click outside
 // TODO: Don't cut off in replies
@@ -377,10 +376,11 @@ function inject(emojiApiPath: string | undefined) {
 		const onClose = (event?: Event | undefined) => {
 			emojiFilterChangeListeners.forEach(onchange => { if (onchange) onchange("") })
 			closeListener(event)
+			popup.style.display = "none"
 		}
 
 		let filter = ""
-		emojiFilterChangeListeners = emojiList.map((emoji) => {
+		emojiFilterChangeListeners = emojiList.map(emoji => {
 			const emojiElement = createElementFromHTML(
 				createImgTag(emoji)
 			) as HTMLImageElement
@@ -475,7 +475,10 @@ function inject(emojiApiPath: string | undefined) {
 			} else {
 				// add to command
 				if (event.key.match(/^[a-z0-9_]$/i)) {
-					emojiFilterChangeListeners.forEach(onchange => { if (onchange) onchange(commandText?.replace(':','') + event.key)})
+					emojiFilterChangeListeners.forEach(onchange => {
+						if (onchange)
+							onchange(commandText?.replace(':','') + event.key)
+					})
 					ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key))
 
 					if (commandText?.length === 3) {
@@ -502,6 +505,9 @@ function inject(emojiApiPath: string | undefined) {
 						onClose()
 					}
 				}
+
+				miniPopup.style.top = `-${miniPopup.clientHeight}px`
+
 				// end command
 				if (event.key === ':') {
 					ckEditor.removeAttribute('emojiCommandText')

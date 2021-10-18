@@ -2,7 +2,6 @@
 // Mini-popup
 // TODO: Re-popup after close not working
 // TODO: Rename to inline popup
-// TODO: If height < 250px when filtering, position top accordingly so it's still right above text
 // TODO: Keyboard control - up, down, enter/tab, escape
 // TODO: Close if click outside
 // TODO: Don't cut off in replies
@@ -312,9 +311,10 @@ function inject(emojiApiPath) {
             emojiFilterChangeListeners.forEach(onchange => { if (onchange)
                 onchange(""); });
             closeListener(event);
+            popup.style.display = "none";
         };
         let filter = "";
-        emojiFilterChangeListeners = emojiList.map((emoji) => {
+        emojiFilterChangeListeners = emojiList.map(emoji => {
             const emojiElement = createElementFromHTML(createImgTag(emoji));
             if (emojiElement) {
                 emojiElement.addEventListener("click", (event) => {
@@ -392,8 +392,10 @@ function inject(emojiApiPath) {
             else {
                 // add to command
                 if (event.key.match(/^[a-z0-9_]$/i)) {
-                    emojiFilterChangeListeners.forEach(onchange => { if (onchange)
-                        onchange((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key); });
+                    emojiFilterChangeListeners.forEach(onchange => {
+                        if (onchange)
+                            onchange((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key);
+                    });
                     ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key));
                     if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 3) {
                         // we have at least two letters. open inline search
@@ -420,6 +422,7 @@ function inject(emojiApiPath) {
                         onClose();
                     }
                 }
+                miniPopup.style.top = `-${miniPopup.clientHeight}px`;
                 // end command
                 if (event.key === ':') {
                     ckEditor.removeAttribute('emojiCommandText');
