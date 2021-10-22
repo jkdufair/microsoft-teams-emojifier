@@ -1,7 +1,7 @@
 "use strict";
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape & mouse hover
-// TODO: Close if click outside
+// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape ✅ & mouse hover
+// TODO: Clicking in minipop doesn't work
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
 // TODO: Handle no items in filter
@@ -146,6 +146,7 @@ function inject(emojiApiPath) {
      * @param emoji - the name of the emoji to use in the img tag
      */
     function emojifyInput(ckEditor, commandText, emoji) {
+        // TODO: make this smarter about split text ranges
         ckEditor.focus();
         let selection = window.getSelection();
         let commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
@@ -310,6 +311,23 @@ function inject(emojiApiPath) {
             }
         });
     }
+    /**
+     * Given some text in which a range exists return the "command" which is the text between the
+     * first colon up to the next space (or the end of the string)
+     *
+     * @param rangeData The string in which to look for a command
+     */
+    function getCommand(rangeData) {
+        if (!rangeData)
+            return undefined;
+        const matchWholeCommand = rangeData.match(/:(.+):/);
+        if (matchWholeCommand)
+            return matchWholeCommand[1];
+        const matchPartialCommand = rangeData.match(/:([^ ]+).*$/);
+        if (matchPartialCommand)
+            return matchPartialCommand[1];
+        return undefined;
+    }
     function createMiniPopup(emojiList, emojiSelectedListener) {
         const popup = document.createElement('div');
         popup.classList.add(miniPopupClassName);
@@ -396,12 +414,8 @@ function inject(emojiApiPath) {
     function injectMiniPopup(ckEditor, emojiList) {
         var _a, _b;
         ckEditor.classList.add(emojiClass);
-        let command = "";
-        let commandInProgress = false;
         const { element: miniPopup, onOpen, onClose, onFilter, onHighlight, onHighlightNext, onHighlightPrevious } = createMiniPopup(emojiList, (_, commandText, emoji) => {
             emojifyInput(ckEditor, commandText, emoji);
-            command = "";
-            commandInProgress = false;
         });
         let isOpen = false;
         // inject the mini popup as a sibling before the ckEditor component
@@ -417,7 +431,7 @@ function inject(emojiApiPath) {
         ckEditor.addEventListener("blur", function () {
             closeIfOpen();
         });
-        ckEditor.addEventListener("click", e => {
+        ckEditor.addEventListener("click", () => {
             closeIfOpen();
         });
         ckEditor.addEventListener("keydown", e => {
@@ -430,6 +444,8 @@ function inject(emojiApiPath) {
         ckEditor.addEventListener("keyup", (e) => {
             const selection = window.getSelection();
             const commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
+            // TODO: teams splits up text elements when you type in the middle. Grab all contiguous
+            // text ranges I guess
             console.log('commandRange: ', commandRange);
             // @ts-ignore
             console.log('commandRange.data: ', commandRange === null || commandRange === void 0 ? void 0 : commandRange.startContainer.data);
@@ -468,53 +484,35 @@ function inject(emojiApiPath) {
             for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
                 element.style.overflow = "visible";
             }
-            if (!commandInProgress) {
-                if (event.key === ':')
-                    commandInProgress = true;
-            }
-            else {
-                // add to command
-                if (event.key.match(/^[a-z0-9_]$/i)) {
-                    command += event.key;
-                    onFilter(command);
-                    if (command.length >= 2 && !isOpen) {
-                        // we have at least two letters. open inline search
-                        onOpen();
-                        isOpen = true;
-                    }
+            // @ts-ignore Doesn't know about "wholeText"
+            const command = getCommand(commandRange === null || commandRange === void 0 ? void 0 : commandRange.commonAncestorContainer.wholeText);
+            console.log('command: ', command);
+            if (command && (event.key.match(/^[a-z0-9_]$/i) || event.key === "Backspace")) {
+                onFilter(command);
+                if (command.length >= 2 && !isOpen) {
+                    // we have at least two letters. open inline search
+                    onOpen();
+                    isOpen = true;
                 }
-                // remove from command
-                if (event.key == "Backspace") {
-                    let originalCommand = command;
-                    command = command.slice(0, -1);
-                    // backspaced to remove the initial colon
-                    if (!command && !originalCommand) {
-                        commandInProgress = false;
-                    }
-                    onFilter(command);
-                    // close inline search - need at least two letters to search
-                    if (command.length < 2) {
-                        onClose();
-                        isOpen = false;
-                    }
-                }
-                // TODO: move this
-                miniPopup.style.top = `-${miniPopup.clientHeight}px`;
-                // end command
-                if (event.key === ':') {
-                    commandInProgress = false;
-                    if (isOpen) {
-                        onClose();
-                        isOpen = false;
-                    }
-                    // replace emoji text with hidden div & the emoji image
-                    if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
-                        event.preventDefault();
-                        emojifyInput(ckEditor, command, command);
-                    }
-                    command = "";
+                // close inline search - need at least two letters to search
+                if (command.length < 2) {
+                    onClose();
+                    isOpen = false;
                 }
             }
+            // User ended command. Emojify!
+            if (command && event.key === ':') {
+                if (isOpen) {
+                    onClose();
+                    isOpen = false;
+                }
+                // replace emoji text with hidden div & the emoji image
+                if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
+                    event.preventDefault();
+                    emojifyInput(ckEditor, command, command);
+                }
+            }
+            miniPopup.style.top = `-${miniPopup.clientHeight}px`;
         });
     }
     function init() {

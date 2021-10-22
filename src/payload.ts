@@ -1,6 +1,6 @@
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape & mouse hover
-// TODO: Close if click outside
+// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape ✅ & mouse hover
+// TODO: Clicking in minipop doesn't work
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
 // TODO: Handle no items in filter
@@ -170,6 +170,7 @@ function inject(emojiApiPath: string | undefined) {
 	 * @param emoji - the name of the emoji to use in the img tag
 	 */
 	function emojifyInput(ckEditor: HTMLDivElement, commandText: string | null, emoji: string) {
+		// TODO: make this smarter about split text ranges
 		ckEditor.focus()
 		let selection = window.getSelection()
 		let commandRange = selection?.getRangeAt(0)
@@ -351,7 +352,7 @@ function inject(emojiApiPath: string | undefined) {
 			(_: Event | null, emoji: string) => {
 				const ckEditor = (buttonContainer as HTMLElement)?.closest('.ts-new-message')?.querySelector('.cke_wysiwyg_div') as HTMLDivElement
 				if (ckEditor)
-					emojifyInput(ckEditor, null, emoji) 
+					emojifyInput(ckEditor, null, emoji)
 			},
 			(_) => {
 				emojiTable.style.display = "none"
@@ -372,8 +373,26 @@ function inject(emojiApiPath: string | undefined) {
 		})
 	}
 
+	/**
+	 * Given some text in which a range exists return the "command" which is the text between the
+	 * first colon up to the next space (or the end of the string)
+	 *
+	 * @param rangeData The string in which to look for a command
+	 */
+	function getCommand(rangeData: string | undefined): string | undefined {
+		if (!rangeData) return undefined
+
+		const matchWholeCommand = rangeData.match(/:(.+):/)
+		if (matchWholeCommand) return matchWholeCommand[1]
+
+		const matchPartialCommand = rangeData.match(/:([^ ]+).*$/)
+		if (matchPartialCommand) return matchPartialCommand[1]
+
+		return undefined
+	}
+
 	function createMiniPopup(emojiList: string[],
-													 emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) {
+		emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) {
 		const popup = document.createElement('div')
 		popup.classList.add(miniPopupClassName)
 
@@ -390,13 +409,13 @@ function inject(emojiApiPath: string | undefined) {
 			div.classList.add('mini-popup-item')
 			div.appendChild(emojiElement)
 			div.appendChild(span)
-			
+
 			emojiElement.addEventListener("click", (event) => {
 				emojiSelectedListener(event, `:${filter}`, emoji)
 				onClose()
 			})
 			popup.appendChild(div)
-			
+
 			const filterHandler = (toFilter: string) => {
 				// save the filter in the outer scope for deleting from the ckEditor
 				if (filter !== toFilter)
@@ -425,8 +444,8 @@ function inject(emojiApiPath: string | undefined) {
 
 		const onOpen = () => {
 			popup.style.display = "block"
-		}		
-																							
+		}
+
 		const onClose = () => {
 			emojiChangeListeners.forEach(handlers => { handlers.filterHandler("") })
 			popup.style.display = "none"
@@ -435,12 +454,12 @@ function inject(emojiApiPath: string | undefined) {
 		const onFilter = (toFilter: string) => {
 			filteredEmojis = emojiList.filter(e => e.includes(toFilter))
 			filter = toFilter
-			emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter)})
+			emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter) })
 			onHighlight(0)
 		}
 
 		const onHighlight = (index: number) => {
-			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index)})
+			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index) })
 			highlightedIndex = index
 		}
 
@@ -449,7 +468,7 @@ function inject(emojiApiPath: string | undefined) {
 				highlightedIndex++
 			else
 				highlightedIndex = 0
-			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex)})
+			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex) })
 		}
 
 		const onHighlightPrevious = () => {
@@ -457,7 +476,7 @@ function inject(emojiApiPath: string | undefined) {
 				highlightedIndex--
 			else
 				highlightedIndex = filteredEmojis.length - 1
-			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex)})
+			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex) })
 		}
 
 		return {
@@ -468,13 +487,11 @@ function inject(emojiApiPath: string | undefined) {
 			onHighlight,
 			onHighlightNext,
 			onHighlightPrevious
-		}		
-}
+		}
+	}
 
 	function injectMiniPopup(ckEditor: HTMLDivElement, emojiList: string[]) {
 		ckEditor.classList.add(emojiClass)
-		let command = ""
-		let commandInProgress = false
 		const {
 			element: miniPopup,
 			onOpen,
@@ -487,8 +504,6 @@ function inject(emojiApiPath: string | undefined) {
 			emojiList,
 			(_: Event | null, commandText: string, emoji: string) => {
 				emojifyInput(ckEditor, commandText, emoji)
-				command = ""
-				commandInProgress = false
 			}
 		)
 
@@ -509,7 +524,7 @@ function inject(emojiApiPath: string | undefined) {
 			closeIfOpen()
 		})
 
-		ckEditor.addEventListener("click", e => {
+		ckEditor.addEventListener("click", () => {
 			closeIfOpen()
 		})
 
@@ -518,12 +533,14 @@ function inject(emojiApiPath: string | undefined) {
 			const event = e as KeyboardEvent
 			// Submitting form - unemojify commands
 			if (event.key === 'Enter' && !isOpen)
-				unemojifyInput(ckEditor)			
+				unemojifyInput(ckEditor)
 		})
 
 		ckEditor.addEventListener("keyup", (e: Event) => {
 			const selection = window.getSelection()
 			const commandRange = selection?.getRangeAt(0)
+			// TODO: teams splits up text elements when you type in the middle. Grab all contiguous
+			// text ranges I guess
 			console.log('commandRange: ', commandRange)
 			// @ts-ignore
 			console.log('commandRange.data: ', commandRange?.startContainer.data)
@@ -564,58 +581,41 @@ function inject(emojiApiPath: string | undefined) {
 			(ckEditor.parentElement as HTMLDivElement).style.overflow = "visible"
 			for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
 				(element as HTMLDivElement).style.overflow = "visible"
-			}			
+			}
 
-			if (!commandInProgress) {
-				if (event.key === ':')
-					commandInProgress = true
-			} else {
-				// add to command
-				if (event.key.match(/^[a-z0-9_]$/i)) {
-					command += event.key
-					onFilter(command)
+			// @ts-ignore Doesn't know about "wholeText"
+			const command = getCommand(commandRange?.commonAncestorContainer.wholeText)
+			console.log('command: ', command)
+			if (command && (event.key.match(/^[a-z0-9_]$/i) || event.key === "Backspace")) {
+				onFilter(command)
 
-					if (command.length >= 2 && !isOpen) {
-						// we have at least two letters. open inline search
-						onOpen()
-						isOpen = true
-					}
+				if (command.length >= 2 && !isOpen) {
+					// we have at least two letters. open inline search
+					onOpen()
+					isOpen = true
 				}
 
-				// remove from command
-				if (event.key == "Backspace") {
-					let originalCommand = command
-					command = command.slice(0, -1)
-					// backspaced to remove the initial colon
-					if (!command && !originalCommand) {
-						commandInProgress = false
-					}
-					onFilter(command)
-					// close inline search - need at least two letters to search
-					if (command.length < 2) {
-						onClose()
-						isOpen = false
-					}
-				}
-
-				// TODO: move this
-				miniPopup.style.top = `-${miniPopup.clientHeight}px`
-
-				// end command
-				if (event.key === ':') {
-					commandInProgress = false
-					if (isOpen) {
-						onClose()
-						isOpen = false
-					}
-					// replace emoji text with hidden div & the emoji image
-					if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
-						event.preventDefault()
-						emojifyInput(ckEditor, command, command)
-					}
-					command = ""
+				// close inline search - need at least two letters to search
+				if (command.length < 2) {
+					onClose()
+					isOpen = false
 				}
 			}
+
+			// User ended command. Emojify!
+			if (command && event.key === ':') {
+				if (isOpen) {
+					onClose()
+					isOpen = false
+				}
+				// replace emoji text with hidden div & the emoji image
+				if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
+					event.preventDefault()
+					emojifyInput(ckEditor, command, command)
+				}
+			}
+
+			miniPopup.style.top = `-${miniPopup.clientHeight}px`			
 		})
 	}
 
