@@ -1,9 +1,11 @@
 "use strict";
 // Mini-popup
-// TODO: Keyboard control - up, down, enter/tab, escape & mouse hover
+// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape & mouse hover
 // TODO: Close if click outside
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
+// TODO: Handle no items in filter
+// TODO: MRU?
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
@@ -62,7 +64,7 @@ function inject(emojiApiPath) {
     const emojiClass = "EMOJIFIER-CHECKED";
     const emojiMatch = /:([\w-_]+):/g;
     const miniPopupClassName = 'emoji-inline-popup';
-    const hiddenEmojiMatch = /<span style="display: none;">(.*?)<\/span><img class="emoji-img".*?>/g;
+    const hiddenEmojiMatch = /<img class="emoji-img" src=".*\/emoji\/(.*)">/g;
     function getValidEmojis() {
         return new Promise((resolve, _) => {
             $.get(emojiApiPath + "/emojis", (result) => {
@@ -135,8 +137,15 @@ function inject(emojiApiPath) {
         });
         div.classList.add(emojiClass);
     }
+    /**
+     * Replace the partially or fully entered emoji command (colon plus an emoji name) with an img tag
+     * to the emoji server
+     *
+     * @param ckEditor - the element the user has typed into
+     * @param commandText - the command (possibly incomplete) they have typed (i.e. :arn or :arnold)
+     * @param emoji - the name of the emoji to use in the img tag
+     */
     function emojifyInput(ckEditor, commandText, emoji) {
-        // text is expected to be the command without the colons, i.e. foobar not :foobar:
         ckEditor.focus();
         let selection = window.getSelection();
         let commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
@@ -144,7 +153,7 @@ function inject(emojiApiPath) {
             // delete any part of command that was typed (i.e. :lun or :lunch)
             if (selection && selection.anchorNode && commandText) {
                 const caretPosition = commandRange.endOffset;
-                commandRange.setStart(selection.anchorNode, caretPosition - commandText.length);
+                commandRange.setStart(selection.anchorNode, caretPosition - commandText.length - 2); // the two colons
                 commandRange.setEnd(selection.anchorNode, caretPosition);
                 commandRange.deleteContents();
             }
@@ -152,10 +161,6 @@ function inject(emojiApiPath) {
             emojiImage.classList.add('emoji-img');
             emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${emoji.replaceAll(':', '')}`;
             commandRange.insertNode(emojiImage);
-            const hiddenSpan = document.createElement('span');
-            hiddenSpan.style.display = "none";
-            hiddenSpan.textContent = `:${emoji}:`;
-            commandRange.insertNode(hiddenSpan);
         }
         // Put cursor after emoji
         selection = window.getSelection();
@@ -165,6 +170,7 @@ function inject(emojiApiPath) {
         }
     }
     function unemojifyInput(ckEditor) {
+        // TODO: can't we just do a regular regex replace?
         if (ckEditor.innerHTML) {
             const matches = ckEditor.innerHTML.matchAll(hiddenEmojiMatch);
             let match;
@@ -172,7 +178,7 @@ function inject(emojiApiPath) {
             let currentIndexInInput = 0;
             while (!(match = matches.next()).done) {
                 resultStr += ckEditor.innerHTML.substring(currentIndexInInput, match.value.index);
-                resultStr += match.value[1];
+                resultStr += ':' + match.value[1] + ':';
                 if (match.value.index != undefined)
                     currentIndexInInput = match.value.index + match.value[0].length;
             }
@@ -309,7 +315,7 @@ function inject(emojiApiPath) {
         popup.classList.add(miniPopupClassName);
         let filter = "";
         let filteredEmojis = emojiList;
-        let selectedIndex = 0;
+        let highlightedIndex = 0;
         const emojiChangeListeners = emojiList.map(emoji => {
             const emojiElement = createElementFromHTML(createImgTag(emoji));
             const span = document.createElement('span');
@@ -331,15 +337,19 @@ function inject(emojiApiPath) {
                     ? "block"
                     : "none";
             };
-            const selectionHandler = (index) => {
-                if (filteredEmojis.indexOf(emoji) == index)
-                    div.classList.add('selected');
-                else
-                    div.classList.remove('selected');
+            const highlightHandler = (index) => {
+                if (filteredEmojis.indexOf(emoji) == index) {
+                    div.classList.add('highlighted');
+                    // @ts-ignore (supported by Chrome)
+                    div.scrollIntoViewIfNeeded(false);
+                }
+                else {
+                    div.classList.remove('highlighted');
+                }
             };
             return {
                 filterHandler,
-                selectionHandler
+                highlightHandler
             };
         });
         const onOpen = () => {
@@ -353,32 +363,76 @@ function inject(emojiApiPath) {
             filteredEmojis = emojiList.filter(e => e.includes(toFilter));
             filter = toFilter;
             emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter); });
-            onSelect(0);
+            onHighlight(0);
         };
-        const onSelect = (index) => {
-            emojiChangeListeners.forEach(handlers => { handlers.selectionHandler(index); });
-            selectedIndex = index;
+        const onHighlight = (index) => {
+            emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index); });
+            highlightedIndex = index;
+        };
+        const onHighlightNext = () => {
+            if (highlightedIndex + 1 <= filteredEmojis.length - 1)
+                highlightedIndex++;
+            else
+                highlightedIndex = 0;
+            emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex); });
+        };
+        const onHighlightPrevious = () => {
+            if (highlightedIndex - 1 >= 0)
+                highlightedIndex--;
+            else
+                highlightedIndex = filteredEmojis.length - 1;
+            emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex); });
         };
         return {
             element: popup,
             onOpen,
             onClose,
             onFilter,
-            onSelect
+            onHighlight,
+            onHighlightNext,
+            onHighlightPrevious
         };
     }
     function injectMiniPopup(ckEditor, emojiList) {
         var _a, _b;
         ckEditor.classList.add(emojiClass);
-        const { element: miniPopup, onOpen, onClose, onFilter, onSelect } = createMiniPopup(emojiList, (_, commandText, emoji) => {
+        let command = "";
+        let commandInProgress = false;
+        const { element: miniPopup, onOpen, onClose, onFilter, onHighlight, onHighlightNext, onHighlightPrevious } = createMiniPopup(emojiList, (_, commandText, emoji) => {
             emojifyInput(ckEditor, commandText, emoji);
-            ckEditor.removeAttribute('emojiCommandText');
+            command = "";
+            commandInProgress = false;
         });
+        let isOpen = false;
         // inject the mini popup as a sibling before the ckEditor component
         if (((_a = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector(`.${miniPopupClassName}`)) === null) {
             (_b = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentElement) === null || _b === void 0 ? void 0 : _b.insertBefore(miniPopup, ckEditor);
         }
-        ckEditor.addEventListener("keydown", function (e) {
+        const closeIfOpen = () => {
+            if (isOpen) {
+                onClose();
+                isOpen = false;
+            }
+        };
+        ckEditor.addEventListener("blur", function () {
+            closeIfOpen();
+        });
+        ckEditor.addEventListener("click", e => {
+            closeIfOpen();
+        });
+        ckEditor.addEventListener("keydown", e => {
+            // TODO: Enter does not submit the form sometimes
+            const event = e;
+            // Submitting form - unemojify commands
+            if (event.key === 'Enter' && !isOpen)
+                unemojifyInput(ckEditor);
+        });
+        ckEditor.addEventListener("keyup", (e) => {
+            const selection = window.getSelection();
+            const commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
+            console.log('commandRange: ', commandRange);
+            // @ts-ignore
+            console.log('commandRange.data: ', commandRange === null || commandRange === void 0 ? void 0 : commandRange.startContainer.data);
             // put listener on submit button if not already there
             const footerElement = ckEditor.closest('.ts-new-message-footer');
             if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
@@ -394,9 +448,13 @@ function inject(emojiApiPath) {
                 }
             }
             const event = e;
-            // Submitting form - unemojify commands
-            if (event.key === 'Enter') {
-                unemojifyInput(ckEditor);
+            if (event.key === 'ArrowDown' && isOpen) {
+                onHighlightNext();
+                event.preventDefault();
+            }
+            if (event.key === 'ArrowUp' && isOpen) {
+                onHighlightPrevious();
+                event.preventDefault();
             }
             /*
              * Handle inline typing of emojis, i.e. :foobar:
@@ -406,54 +464,55 @@ function inject(emojiApiPath) {
              * submitting, unhide the emoji text, and let the other logic in this plugin handle it when it's
              * subsequently displayed
              */
-            let commandText = ckEditor.getAttribute('emojiCommandText');
             ckEditor.parentElement.style.overflow = "visible";
             for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
                 element.style.overflow = "visible";
             }
-            if (commandText === null) {
-                // start emoji command
-                if (event.key === ":")
-                    ckEditor.setAttribute('emojiCommandText', event.key);
+            if (!commandInProgress) {
+                if (event.key === ':')
+                    commandInProgress = true;
             }
             else {
                 // add to command
                 if (event.key.match(/^[a-z0-9_]$/i)) {
-                    onFilter((commandText === null || commandText === void 0 ? void 0 : commandText.replace(':', '')) + event.key);
-                    ckEditor.setAttribute('emojiCommandText', (commandText = commandText + event.key));
-                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 3) {
+                    command += event.key;
+                    onFilter(command);
+                    if (command.length >= 2 && !isOpen) {
                         // we have at least two letters. open inline search
                         onOpen();
+                        isOpen = true;
                     }
                 }
                 // remove from command
                 if (event.key == "Backspace") {
-                    const text = commandText === null || commandText === void 0 ? void 0 : commandText.slice(0, -1);
-                    if (!text) {
-                        // end command (first ':' removed)
-                        ckEditor.removeAttribute('emojiCommandText');
+                    let originalCommand = command;
+                    command = command.slice(0, -1);
+                    // backspaced to remove the initial colon
+                    if (!command && !originalCommand) {
+                        commandInProgress = false;
                     }
-                    else {
-                        // remove letter from command
-                        ckEditor.setAttribute('emojiCommandText', (commandText = text));
-                    }
-                    onFilter(commandText.replace(':', ''));
+                    onFilter(command);
                     // close inline search - need at least two letters to search
-                    if ((commandText === null || commandText === void 0 ? void 0 : commandText.length) === 2) {
+                    if (command.length < 2) {
                         onClose();
+                        isOpen = false;
                     }
                 }
+                // TODO: move this
                 miniPopup.style.top = `-${miniPopup.clientHeight}px`;
                 // end command
                 if (event.key === ':') {
-                    ckEditor.removeAttribute('emojiCommandText');
-                    onClose();
-                    const plainCommand = commandText.replace(':', '');
-                    // replace emoji text with hidden div & the emoji image
-                    if (ckEditor.innerHTML && emojiList.indexOf(plainCommand) != -1) {
-                        event.preventDefault();
-                        emojifyInput(ckEditor, commandText, plainCommand);
+                    commandInProgress = false;
+                    if (isOpen) {
+                        onClose();
+                        isOpen = false;
                     }
+                    // replace emoji text with hidden div & the emoji image
+                    if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
+                        event.preventDefault();
+                        emojifyInput(ckEditor, command, command);
+                    }
+                    command = "";
                 }
             }
         });
