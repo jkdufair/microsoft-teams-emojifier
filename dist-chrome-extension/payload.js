@@ -5,7 +5,6 @@
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
 // TODO: Handle no items in filter
-// TODO: MRU?
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
@@ -18,6 +17,7 @@
 // TODO: Simple URL-based auth for server to keep out the riffraff
 // TODO: Add emojis to server with "{pasted image}+:emojiname:"
 // TODO: alt text & popover for emojis
+// TODO: MRU?
 // Housekeeping
 // TODO: eslint
 // TODO: SASS/LESS
@@ -64,7 +64,7 @@ function inject(emojiApiPath) {
     const emojiClass = "EMOJIFIER-CHECKED";
     const emojiMatch = /:([\w-_]+):/g;
     const miniPopupClassName = 'emoji-inline-popup';
-    const hiddenEmojiMatch = /<img class="emoji-img" src=".*\/emoji\/(.*)">/g;
+    const hiddenEmojiMatch = /<img class="emoji-img" src="http.+?\/emoji\/(.*?)">/g;
     function getValidEmojis() {
         return new Promise((resolve, _) => {
             $.get(emojiApiPath + "/emojis", (result) => {
@@ -146,7 +146,9 @@ function inject(emojiApiPath) {
      * @param emoji - the name of the emoji to use in the img tag
      */
     function emojifyInput(ckEditor, commandText, emoji) {
-        // TODO: make this smarter about split text ranges
+        var _a;
+        // consolidate potentially split text nodes
+        (_a = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentNode) === null || _a === void 0 ? void 0 : _a.normalize();
         ckEditor.focus();
         let selection = window.getSelection();
         let commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
@@ -158,34 +160,18 @@ function inject(emojiApiPath) {
                 commandRange.setEnd(selection.anchorNode, caretPosition);
                 commandRange.deleteContents();
             }
+            // insert img tag for emoji
             const emojiImage = document.createElement('img');
             emojiImage.classList.add('emoji-img');
             emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${emoji.replaceAll(':', '')}`;
             commandRange.insertNode(emojiImage);
-        }
-        // Put cursor after emoji
-        selection = window.getSelection();
-        commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
-        if (commandRange) {
+            // Put cursor after emoji
             commandRange.collapse();
         }
     }
     function unemojifyInput(ckEditor) {
-        // TODO: can't we just do a regular regex replace?
-        if (ckEditor.innerHTML) {
-            const matches = ckEditor.innerHTML.matchAll(hiddenEmojiMatch);
-            let match;
-            let resultStr = "";
-            let currentIndexInInput = 0;
-            while (!(match = matches.next()).done) {
-                resultStr += ckEditor.innerHTML.substring(currentIndexInInput, match.value.index);
-                resultStr += ':' + match.value[1] + ':';
-                if (match.value.index != undefined)
-                    currentIndexInInput = match.value.index + match.value[0].length;
-            }
-            resultStr += ckEditor.innerHTML.substring(currentIndexInInput, ckEditor.innerHTML.length);
-            ckEditor.innerHTML = resultStr;
-        }
+        console.log('matches', ckEditor.innerHTML.match(hiddenEmojiMatch));
+        ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:");
     }
     function generateFilterBox(onFilterChange, debounce, onFilterSelected) {
         const inputBox = document.createElement("input");
@@ -444,11 +430,6 @@ function inject(emojiApiPath) {
         ckEditor.addEventListener("keyup", (e) => {
             const selection = window.getSelection();
             const commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
-            // TODO: teams splits up text elements when you type in the middle. Grab all contiguous
-            // text ranges I guess
-            console.log('commandRange: ', commandRange);
-            // @ts-ignore
-            console.log('commandRange.data: ', commandRange === null || commandRange === void 0 ? void 0 : commandRange.startContainer.data);
             // put listener on submit button if not already there
             const footerElement = ckEditor.closest('.ts-new-message-footer');
             if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
@@ -484,9 +465,7 @@ function inject(emojiApiPath) {
             for (const element of document.getElementsByClassName('ts-new-message-footer-content')) {
                 element.style.overflow = "visible";
             }
-            // @ts-ignore Doesn't know about "wholeText"
-            const command = getCommand(commandRange === null || commandRange === void 0 ? void 0 : commandRange.commonAncestorContainer.wholeText);
-            console.log('command: ', command);
+            const command = getCommand((commandRange === null || commandRange === void 0 ? void 0 : commandRange.commonAncestorContainer).wholeText);
             if (command && (event.key.match(/^[a-z0-9_]$/i) || event.key === "Backspace")) {
                 onFilter(command);
                 if (command.length >= 2 && !isOpen) {
