@@ -170,7 +170,6 @@ function inject(emojiApiPath: string | undefined) {
 	 * @param emoji - the name of the emoji to use in the img tag
 	 */
 	function emojifyInput(ckEditor: HTMLDivElement, commandText: string | null, emoji: string) {
-		// consolidate potentially split text nodes
 		ckEditor?.parentNode?.normalize()
 		ckEditor.focus()
 		let selection = window.getSelection()
@@ -180,7 +179,7 @@ function inject(emojiApiPath: string | undefined) {
 			// delete any part of command that was typed (i.e. :lun or :lunch)
 			if (selection && selection.anchorNode && commandText) {
 				const caretPosition = commandRange.endOffset
-				commandRange.setStart(selection.anchorNode, caretPosition - commandText.length - 2) // the two colons
+				commandRange.setStart(selection.anchorNode, caretPosition - commandText.length)
 				commandRange.setEnd(selection.anchorNode, caretPosition)
 				commandRange.deleteContents()
 			}
@@ -197,7 +196,6 @@ function inject(emojiApiPath: string | undefined) {
 	}
 
 	function unemojifyInput(ckEditor: HTMLElement) {
-		console.log('matches', ckEditor.innerHTML.match(hiddenEmojiMatch))
 		ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:")
 	}
 
@@ -502,12 +500,15 @@ function inject(emojiApiPath: string | undefined) {
 			if (isOpen) {
 				onClose()
 				isOpen = false
+				// Esc closes popup but unfocuses the editor. Bring the focus back!
+				ckEditor.focus()
 			}
 		}
 
-		ckEditor.addEventListener("blur", function() {
-			closeIfOpen()
-		})
+		// TODO: Somehow figure out how to handle Esc closes mini popup but clicking in it does not
+		// ckEditor.addEventListener("blur", function() {
+		// 	closeIfOpen()
+		// })
 
 		ckEditor.addEventListener("click", () => {
 			closeIfOpen()
@@ -589,7 +590,7 @@ function inject(emojiApiPath: string | undefined) {
 				// replace emoji text with hidden div & the emoji image
 				if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
 					event.preventDefault()
-					emojifyInput(ckEditor, command, command)
+					emojifyInput(ckEditor, `:${command}:`, command)
 				}
 			}
 

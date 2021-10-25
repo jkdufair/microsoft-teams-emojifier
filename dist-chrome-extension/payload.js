@@ -147,7 +147,6 @@ function inject(emojiApiPath) {
      */
     function emojifyInput(ckEditor, commandText, emoji) {
         var _a;
-        // consolidate potentially split text nodes
         (_a = ckEditor === null || ckEditor === void 0 ? void 0 : ckEditor.parentNode) === null || _a === void 0 ? void 0 : _a.normalize();
         ckEditor.focus();
         let selection = window.getSelection();
@@ -156,7 +155,7 @@ function inject(emojiApiPath) {
             // delete any part of command that was typed (i.e. :lun or :lunch)
             if (selection && selection.anchorNode && commandText) {
                 const caretPosition = commandRange.endOffset;
-                commandRange.setStart(selection.anchorNode, caretPosition - commandText.length - 2); // the two colons
+                commandRange.setStart(selection.anchorNode, caretPosition - commandText.length);
                 commandRange.setEnd(selection.anchorNode, caretPosition);
                 commandRange.deleteContents();
             }
@@ -170,7 +169,6 @@ function inject(emojiApiPath) {
         }
     }
     function unemojifyInput(ckEditor) {
-        console.log('matches', ckEditor.innerHTML.match(hiddenEmojiMatch));
         ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:");
     }
     function generateFilterBox(onFilterChange, debounce, onFilterSelected) {
@@ -412,11 +410,14 @@ function inject(emojiApiPath) {
             if (isOpen) {
                 onClose();
                 isOpen = false;
+                // Esc closes popup but unfocuses the editor. Bring the focus back!
+                ckEditor.focus();
             }
         };
-        ckEditor.addEventListener("blur", function () {
-            closeIfOpen();
-        });
+        // TODO: Somehow figure out how to handle Esc closes mini popup but clicking in it does not
+        // ckEditor.addEventListener("blur", function() {
+        // 	closeIfOpen()
+        // })
         ckEditor.addEventListener("click", () => {
             closeIfOpen();
         });
@@ -488,7 +489,7 @@ function inject(emojiApiPath) {
                 // replace emoji text with hidden div & the emoji image
                 if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
                     event.preventDefault();
-                    emojifyInput(ckEditor, command, command);
+                    emojifyInput(ckEditor, `:${command}:`, command);
                 }
             }
             miniPopup.style.top = `-${miniPopup.clientHeight}px`;
