@@ -1,7 +1,7 @@
 "use strict";
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape ✅ & mouse hover
-// TODO: Clicking in minipop doesn't work
+// TODO: Keyboard control - up ✅, down ✅, tab ✅, escape ✅ & mouse hover ✅
+// TODO: Get enter working for selecting emoji
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
 // TODO: Handle no items in filter
@@ -322,13 +322,20 @@ function inject(emojiApiPath) {
             const emojiElement = createElementFromHTML(createImgTag(emoji));
             const span = document.createElement('span');
             span.innerText = `:${emoji}:`;
+            span.style.cursor = 'default';
             const div = document.createElement('div');
             div.classList.add('mini-popup-item');
             div.appendChild(emojiElement);
             div.appendChild(span);
-            emojiElement.addEventListener("click", (event) => {
+            div.addEventListener("click", (event) => {
                 emojiSelectedListener(event, `:${filter}`, emoji);
                 onClose();
+            });
+            div.addEventListener("mouseover", event => {
+                var _a;
+                const title = (_a = event.target.firstChild) === null || _a === void 0 ? void 0 : _a.title;
+                if (title)
+                    emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(filteredEmojis.indexOf(title), false); });
             });
             popup.appendChild(div);
             const filterHandler = (toFilter) => {
@@ -339,15 +346,17 @@ function inject(emojiApiPath) {
                     ? "block"
                     : "none";
             };
-            const highlightHandler = (index) => {
+            const highlightHandler = (index, shouldScroll) => {
                 if (filteredEmojis.indexOf(emoji) == index) {
                     div.classList.add('highlighted');
-                    // @ts-ignore (supported by Chrome)
-                    div.scrollIntoViewIfNeeded(false);
+                    if (shouldScroll)
+                        // @ts-ignore (supported by Chrome)
+                        div.scrollIntoViewIfNeeded(false);
                 }
                 else {
                     div.classList.remove('highlighted');
                 }
+                highlightedIndex = index;
             };
             return {
                 filterHandler,
@@ -370,6 +379,7 @@ function inject(emojiApiPath) {
         const onHighlight = (index) => {
             emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index); });
             highlightedIndex = index;
+            return filteredEmojis[highlightedIndex];
         };
         const onHighlightNext = () => {
             if (highlightedIndex + 1 <= filteredEmojis.length - 1)
@@ -377,6 +387,7 @@ function inject(emojiApiPath) {
             else
                 highlightedIndex = 0;
             emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex); });
+            return filteredEmojis[highlightedIndex];
         };
         const onHighlightPrevious = () => {
             if (highlightedIndex - 1 >= 0)
@@ -384,21 +395,25 @@ function inject(emojiApiPath) {
             else
                 highlightedIndex = filteredEmojis.length - 1;
             emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex); });
+            return filteredEmojis[highlightedIndex];
+        };
+        const getHighlightedEmoji = () => {
+            return filteredEmojis[highlightedIndex];
         };
         return {
             element: popup,
             onOpen,
             onClose,
             onFilter,
-            onHighlight,
             onHighlightNext,
-            onHighlightPrevious
+            onHighlightPrevious,
+            getHighlightedEmoji
         };
     }
     function injectMiniPopup(ckEditor, emojiList) {
         var _a, _b;
         ckEditor.classList.add(emojiClass);
-        const { element: miniPopup, onOpen, onClose, onFilter, onHighlight, onHighlightNext, onHighlightPrevious } = createMiniPopup(emojiList, (_, commandText, emoji) => {
+        const { element: miniPopup, onOpen, onClose, onFilter, onHighlightNext, onHighlightPrevious, getHighlightedEmoji } = createMiniPopup(emojiList, (_, commandText, emoji) => {
             emojifyInput(ckEditor, commandText, emoji);
         });
         let isOpen = false;
@@ -427,6 +442,17 @@ function inject(emojiApiPath) {
             // Submitting form - unemojify commands
             if (event.key === 'Enter' && !isOpen)
                 unemojifyInput(ckEditor);
+            if ((event.key === 'Tab') && isOpen) {
+                const selection = window.getSelection();
+                const commandRange = selection === null || selection === void 0 ? void 0 : selection.getRangeAt(0);
+                const command = getCommand((commandRange === null || commandRange === void 0 ? void 0 : commandRange.commonAncestorContainer).wholeText);
+                if (command) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    emojifyInput(ckEditor, `:${command}`, getHighlightedEmoji());
+                    closeIfOpen();
+                }
+            }
         });
         ckEditor.addEventListener("keyup", (e) => {
             const selection = window.getSelection();

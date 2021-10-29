@@ -1,6 +1,6 @@
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, enter/tab, escape ✅ & mouse hover
-// TODO: Clicking in minipop doesn't work
+// TODO: Keyboard control - up ✅, down ✅, tab ✅, escape ✅ & mouse hover ✅
+// TODO: Get enter working for selecting emoji
 // TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
 // TODO: Handle no items in filter
@@ -388,15 +388,23 @@ function inject(emojiApiPath: string | undefined) {
 			) as HTMLImageElement
 			const span = document.createElement('span')
 			span.innerText = `:${emoji}:`
+			span.style.cursor = 'default'
 			const div = document.createElement('div') as HTMLDivElement
 			div.classList.add('mini-popup-item')
 			div.appendChild(emojiElement)
 			div.appendChild(span)
 
-			emojiElement.addEventListener("click", (event) => {
+			div.addEventListener("click", (event) => {
 				emojiSelectedListener(event, `:${filter}`, emoji)
 				onClose()
 			})
+
+			div.addEventListener("mouseover", event => {
+				const title = ((event.target as HTMLDivElement).firstChild as HTMLImageElement)?.title
+				if (title)
+					emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(filteredEmojis.indexOf(title), false) })
+			})
+
 			popup.appendChild(div)
 
 			const filterHandler = (toFilter: string) => {
@@ -409,14 +417,16 @@ function inject(emojiApiPath: string | undefined) {
 					: "none"
 			}
 
-			const highlightHandler = (index: number) => {
+			const highlightHandler = (index: number, shouldScroll?: boolean) => {
 				if (filteredEmojis.indexOf(emoji) == index) {
 					div.classList.add('highlighted')
-					// @ts-ignore (supported by Chrome)
-					div.scrollIntoViewIfNeeded(false)
+					if (shouldScroll)
+						// @ts-ignore (supported by Chrome)
+						div.scrollIntoViewIfNeeded(false)
 				} else {
 					div.classList.remove('highlighted')
 				}
+				highlightedIndex = index
 			}
 
 			return {
@@ -444,6 +454,7 @@ function inject(emojiApiPath: string | undefined) {
 		const onHighlight = (index: number) => {
 			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index) })
 			highlightedIndex = index
+			return filteredEmojis[highlightedIndex]
 		}
 
 		const onHighlightNext = () => {
@@ -452,6 +463,7 @@ function inject(emojiApiPath: string | undefined) {
 			else
 				highlightedIndex = 0
 			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex) })
+			return filteredEmojis[highlightedIndex]
 		}
 
 		const onHighlightPrevious = () => {
@@ -460,6 +472,11 @@ function inject(emojiApiPath: string | undefined) {
 			else
 				highlightedIndex = filteredEmojis.length - 1
 			emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(highlightedIndex) })
+			return filteredEmojis[highlightedIndex]
+		}
+
+		const getHighlightedEmoji = () => {
+			return filteredEmojis[highlightedIndex]
 		}
 
 		return {
@@ -467,9 +484,9 @@ function inject(emojiApiPath: string | undefined) {
 			onOpen,
 			onClose,
 			onFilter,
-			onHighlight,
 			onHighlightNext,
-			onHighlightPrevious
+			onHighlightPrevious,
+			getHighlightedEmoji
 		}
 	}
 
@@ -480,9 +497,9 @@ function inject(emojiApiPath: string | undefined) {
 			onOpen,
 			onClose,
 			onFilter,
-			onHighlight,
 			onHighlightNext,
-			onHighlightPrevious
+			onHighlightPrevious,
+			getHighlightedEmoji
 		} = createMiniPopup(
 			emojiList,
 			(_: Event | null, commandText: string, emoji: string) => {
@@ -520,6 +537,17 @@ function inject(emojiApiPath: string | undefined) {
 			// Submitting form - unemojify commands
 			if (event.key === 'Enter' && !isOpen)
 				unemojifyInput(ckEditor)
+			if ((event.key === 'Tab') && isOpen) {
+				const selection = window.getSelection()
+				const commandRange = selection?.getRangeAt(0)
+				const command = getCommand((commandRange?.commonAncestorContainer as Text).wholeText)
+				if (command) {
+					e.preventDefault()
+					e.stopPropagation()
+					emojifyInput(ckEditor, `:${command}`, getHighlightedEmoji())
+					closeIfOpen()
+				}
+			}
 		})
 
 		ckEditor.addEventListener("keyup", (e: Event) => {
