@@ -1,9 +1,6 @@
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, tab ✅, escape ✅ & mouse hover ✅
 // TODO: Get enter working for selecting emoji
-// TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
-// TODO: Handle no items in filter
 
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
@@ -437,6 +434,10 @@ function inject(emojiApiPath: string | undefined) {
 
 		const onOpen = () => {
 			popup.style.display = "block"
+			// don't cut off the popover in replies
+			for (const element of document.getElementsByClassName('ts-message-list-item')) {
+				(element as HTMLDivElement).style.overflow = "visible"
+			}
 		}
 
 		const onClose = () => {
@@ -447,8 +448,13 @@ function inject(emojiApiPath: string | undefined) {
 		const onFilter = (toFilter: string) => {
 			filteredEmojis = emojiList.filter(e => e.includes(toFilter))
 			filter = toFilter
-			emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter) })
-			onHighlight(0)
+			if (filteredEmojis.length > 0) {
+				popup.style.display = "block"
+				emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter) })
+				onHighlight(0)
+			} else {
+				popup.style.display = "none"
+			}
 		}
 
 		const onHighlight = (index: number) => {

@@ -1,10 +1,7 @@
 "use strict";
 // Mini-popup
-// TODO: Keyboard control - up ✅, down ✅, tab ✅, escape ✅ & mouse hover ✅
 // TODO: Get enter working for selecting emoji
-// TODO: Don't cut off in replies
 // TODO: Fuzzy filter & highlight fuzzy matches
-// TODO: Handle no items in filter
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
@@ -365,6 +362,10 @@ function inject(emojiApiPath) {
         });
         const onOpen = () => {
             popup.style.display = "block";
+            // don't cut off the popover in replies
+            for (const element of document.getElementsByClassName('ts-message-list-item')) {
+                element.style.overflow = "visible";
+            }
         };
         const onClose = () => {
             emojiChangeListeners.forEach(handlers => { handlers.filterHandler(""); });
@@ -373,8 +374,14 @@ function inject(emojiApiPath) {
         const onFilter = (toFilter) => {
             filteredEmojis = emojiList.filter(e => e.includes(toFilter));
             filter = toFilter;
-            emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter); });
-            onHighlight(0);
+            if (filteredEmojis.length > 0) {
+                popup.style.display = "block";
+                emojiChangeListeners.forEach(handlers => { handlers.filterHandler(filter); });
+                onHighlight(0);
+            }
+            else {
+                popup.style.display = "none";
+            }
         };
         const onHighlight = (index) => {
             emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(index); });
