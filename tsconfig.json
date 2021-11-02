@@ -1,8 +1,9 @@
 {
 	"compilerOptions": {
-		"target": "es6",
-		"module": "esnext",
-		"outDir": "dist-chrome-extension",
+		"target": "es5",
+		"module": "es6",
+		"outDir": "dist",
+		"sourceMap": true,
 		"lib": [
 			"esnext",
 			"DOM",
@@ -16,7 +17,8 @@
 		"resolveJsonModule": true,
 		"esModuleInterop": true,
 		"allowSyntheticDefaultImports": true,
-		"noFallthroughCasesInSwitch": true
+		"noFallthroughCasesInSwitch": true,
+		"downlevelIteration": true
 	},
 	"include": [
 		"src"
