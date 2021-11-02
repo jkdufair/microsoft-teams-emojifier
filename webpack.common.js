@@ -3,9 +3,29 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
-	entry: './src/emojifier.ts',
+	entry: [
+		'./src/emojifier.ts',
+		'./src/emojifier.scss'
+	],
 	module: {
-		rules: [{ test: /\.ts/, use: 'ts-loader', exclude: /node_modules/ }],
+		rules: [
+			{
+				test: /\.ts/,
+				loader: 'ts-loader',
+				exclude: /node_modules/
+			},
+			{
+				test: /\.scss$/,
+				type: 'asset/resource',
+				generator: {
+					filename: 'emojifier.css'
+				},
+				use: [
+					'sass-loader'
+				],
+				exclude: /node_modules/
+			}
+		],
 	},
 	resolve: {
 		extensions: ['.ts', '.js'],
@@ -19,14 +39,15 @@ module.exports = {
 				{ from: './src/icons/thonk32.png' },
 				{ from: './src/icons/thonk48.png' },
 				{ from: './src/icons/thonk128.png' },
-				{ from: './src/icons/thonk.xcf' },
 				{ from: './src/options.html' },
 				{ from: './src/options.js' },
-				{ from: './src/emojifier.css' },
 				{ from: './src/hot-reload.js' },
 				{ from: './src/contentScript.js' }
 			]
 		})
 	],
-	output: { filename: 'emojifier.js', path: path.resolve(__dirname, 'dist') }
+	output: {
+		path: path.resolve(__dirname, 'dist'),
+		filename: 'emojifier.js'
+	}
 };

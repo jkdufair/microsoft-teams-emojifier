@@ -1,9 +1,6 @@
 import { emojifyInput, createElementFromHTML } from './shared'
 import { injectInlinePopup } from './inline-popup'
 
-// inline popup
-// TODO: Get enter working for selecting emoji
-
 // Features
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
@@ -18,14 +15,10 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: alt text & popover for emojis
 // TODO: MRU?
 
-// Housekeeping
-// TODO: eslint
-// TODO: SASS/LESS
-// TODO: webpack
-
 // Bugs
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
+// TODO: Get enter working for completion from inline popup
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
