@@ -28,12 +28,12 @@
 	padding: 6px 0;
 	overflow-y: auto;
 }
-.mini-popup-item {
+.inline-popup-item {
 	padding-top: 4px;
 	padding-bottom: 4px;
 }
-.mini-popup-item.highlighted {
-	background-color: #1264a3;
+.inline-popup-item.highlighted {
+	background-color: rgba(18, 100, 163, 0.9);
 	color: white;
 }
 
@@ -76,4 +76,9 @@
 #emoji-input-box-container {
   padding: 8px 12px 10px 12px;
   border-top: 1px solid #ccc;
+}
+
+.fuzzy-highlight {
+	background-color: rgba(242, 199, 68, 0.4);
+	color: #0b4c8c;
 }
