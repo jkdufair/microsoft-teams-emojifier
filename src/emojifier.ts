@@ -5,15 +5,17 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Use mutation observer vs. hacky timer & attributes
 // TODO: Style grid popup a bit nicer
 // TODO: Reactions
-// TODO: Background fetch on launch
-// TODO: Websocket push when new emoji added
 // TODO: Load some/all basic emojis into server
 // TODO: Fix electron install
 // TODO: Large emoji when no text
-// TODO: Simple URL-based auth for server to keep out the riffraff
-// TODO: Add emojis to server with "{pasted image}+:emojiname:"
+// TODO: Emoji server auth
 // TODO: alt text & popover for emojis
-// TODO: MRU?
+// TODO: MRU
+
+// Someday
+// TODO: Background fetch on launch
+// TODO: Websocket push when new emoji added
+// TODO: Add emojis to server with "{pasted image}+:emojiname:"
 
 // Bugs
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
@@ -31,22 +33,6 @@ function getValidEmojis() {
 			resolve(result.sort())
 		})
 	})
-}
-
-// function postEmojiUsages(emojiUsages) {
-//   return new Promise((resolve, reject) => {
-//     $.post({
-//       url: emojiApiPath + "/emojis/usage",
-//       data: JSON.stringify(emojiUsages),
-//       processData: false,
-//       contentType: "application/json",
-//       success: () => resolve(),
-//     })
-//   })
-// }
-
-function getMessageContentList() {
-	return $(".message-body-content > div:not(." + emojiClass + ")").toArray()
 }
 
 function createImgTag(emoticonName: string) {
@@ -273,13 +259,53 @@ function init() {
 
 	getValidEmojis().then((emojis: string[]) => {
 		var emojisUsed = {}
-		setInterval(() => {
-			var messageList = getMessageContentList()
-			messageList.forEach((div): void =>
-				emojifyMessageDiv(div, emojis, emojisUsed)
-			)
-			injectPreviewButtons(emojis)
+		let documentObserver: MutationObserver
+		let messagesContainerObserver: MutationObserver
+		const config = { childList: true, subtree: true }
+		const callback = (mutationsList: MutationRecord[]) => {
+			mutationsList.forEach((mr: MutationRecord) => {
+				// We are observing the whole document. Find the messages container
+				// ASAP and disconnect observing the whole document
+				// TODO: handle routing changes?
+				// TODO: what if we're on another route? We'll observe the whole document forever
+				if ([...mr.addedNodes]
+					.some((n: Node) =>
+						!!(n as HTMLDivElement)?.className &&
+						typeof (n as HTMLDivElement)?.className === 'string' &&
+						(n as HTMLDivElement)?.className.startsWith('ts-middle '))) {
+					// Found the message container parent that angular injected. Disconnect and observe the
+					// immediate parent of the individual message bodies
+					documentObserver.disconnect()
 
+					const element = ([...mr.addedNodes][0] as HTMLDivElement)?.getElementsByClassName('ts-message-list-container')[0]
+					messagesContainerObserver = new MutationObserver((messagesMutationsList: MutationRecord[]) => {
+						// We're only interested in the message body divs that get added to the DOM
+						if (messagesMutationsList.some((mr: MutationRecord) => mr.addedNodes.length > 0 &&
+							[...mr.addedNodes].some((n: Node) =>
+								!!(n as HTMLDivElement)?.className &&
+								typeof (n as HTMLDivElement)?.className === 'string' &&
+								(n as HTMLDivElement)?.className.includes('ts-message-list-item')))) {
+							const mutationRecords = messagesMutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
+							mutationRecords.forEach((mr): void => {
+								mr.addedNodes.forEach((node): void => {
+									// filter out the comment nodes
+									if (node.nodeName === 'DIV')
+										emojifyMessageDiv((node as HTMLDivElement).getElementsByClassName('message-body-content')[0], emojis, emojisUsed)
+								})
+							})
+						}
+					})
+					messagesContainerObserver.observe(element, { childList: true })
+				}
+
+			})
+		}
+		documentObserver = new MutationObserver(callback)
+		documentObserver.observe(document, config)
+
+		injectPreviewButtons(emojis)
+
+		setInterval(() => {
 			var ckEditors = document.getElementsByClassName('cke_wysiwyg_div')
 			for (const ckEditor of ckEditors) {
 				const cke = ckEditor as HTMLDivElement
@@ -300,4 +326,3 @@ function init() {
 }
 
 init()
-
