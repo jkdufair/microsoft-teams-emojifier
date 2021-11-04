@@ -48,7 +48,7 @@ function createImgTag(emoticonName: string) {
 }
 
 function crawlTree(htmlElement: Element, handleLeaf: { (leaf: Element): void }) {
-	if (htmlElement.childElementCount <= 0) {
+	if (htmlElement && htmlElement.childElementCount <= 0) {
 		handleLeaf(htmlElement)
 		return
 	}
@@ -58,7 +58,7 @@ function crawlTree(htmlElement: Element, handleLeaf: { (leaf: Element): void }) 
 	}
 }
 
-function injectEmojiImages(inputText: string, validEmojis: string[], emojisUsed: { [x: string]: number; }) {
+function injectEmojiImages(inputText: string, validEmojis: string[]) {
 	var resultStr = ""
 	var matches = inputText.matchAll(emojiMatch)
 	var currentIndexInInput = 0
@@ -69,8 +69,6 @@ function injectEmojiImages(inputText: string, validEmojis: string[], emojisUsed:
 		if (validEmojis.indexOf(match.value[1]) != -1) {
 			const emojiName = match.value[1]
 			reInjectText = createImgTag(emojiName)
-			emojisUsed[emojiName] =
-				(emojisUsed[emojiName] === undefined ? 0 : emojisUsed[emojiName]) + 1
 		}
 
 		resultStr += inputText.substring(currentIndexInInput, match.value.index)
@@ -82,12 +80,11 @@ function injectEmojiImages(inputText: string, validEmojis: string[], emojisUsed:
 	return resultStr
 }
 
-function emojifyMessageDiv(div: Element, validEmojis: string[], emojisUsed: { [x: string]: number; }) {
+function emojifyMessageDiv(div: Element, validEmojis: string[]) {
 	crawlTree(div, (leaf: Element) => {
 		leaf.innerHTML = injectEmojiImages(
 			leaf.innerHTML,
-			validEmojis,
-			emojisUsed
+			validEmojis
 		)
 	})
 	div.classList.add(emojiClass)
@@ -250,78 +247,91 @@ function injectPreviewButton(previousPreviewButton: HTMLElement, emojiList: stri
 	})
 }
 
+let documentObserver: MutationObserver | undefined
+let messagesContainerObserver: MutationObserver | undefined
+let messageObserver: MutationObserver | undefined
+
+const observeChanges = (emojis: string[]) => {
+	if (!window.location.hash.includes('/conversations/')) {
+		documentObserver?.disconnect()
+		documentObserver = undefined
+		messagesContainerObserver?.disconnect()
+		messagesContainerObserver = undefined
+		messageObserver?.disconnect()
+		messageObserver = undefined
+		return
+	}
+	console.log('emo observeChanges')
+	// TODO: emojify replies
+	// TODO: inject preview buttons
+	const config = { childList: true, subtree: true }
+	const callback = (mutationsList: MutationRecord[]) => {
+		mutationsList.forEach((mr: MutationRecord) => {
+			// We are observing the whole document. Find the messages container
+			// ASAP and disconnect observing the whole document
+			if ([...mr.addedNodes]
+				.some((n: Node) =>
+					!!(n as HTMLDivElement)?.className &&
+					typeof (n as HTMLDivElement)?.className === 'string' &&
+					(n as HTMLDivElement)?.className.startsWith('ts-middle '))) {
+				// Found the message container parent that angular injected. Disconnect and observe the
+				// immediate parent of the individual message bodies
+				documentObserver?.disconnect()
+
+				const element = ([...mr.addedNodes][0] as HTMLDivElement)?.getElementsByClassName('ts-message-list-container')[0]
+				messagesContainerObserver = new MutationObserver((messagesMutationsList: MutationRecord[]) => {
+					// We're only interested in the message body divs that get added to the DOM
+					if (messagesMutationsList.some((mr: MutationRecord) => mr.addedNodes.length > 0 &&
+						[...mr.addedNodes].some((n: Node) =>
+							!!(n as HTMLDivElement)?.className &&
+							typeof (n as HTMLDivElement)?.className === 'string' &&
+							(n as HTMLDivElement)?.className.includes('ts-message-list-item')))) {
+						const mutationRecords = messagesMutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
+						mutationRecords.forEach((mr): void => {
+							mr.addedNodes.forEach((node): void => {
+								// filter out the comment nodes
+								if (node.nodeName === 'DIV') {
+									const messageListItem = ((node as HTMLDivElement).closest('.ts-message-list-item')) as Element
+									const replyMessageFooter = messageListItem.getElementsByClassName('ts-reply-message-footer')[0] as Element
+									
+									if (!messageObserver)
+										messageObserver = new MutationObserver((messageMutationList: MutationRecord[]) => {
+											const cke = messageMutationList
+												.filter((mr: MutationRecord) => [...mr.addedNodes]
+													.some((n: Node) => (n as Element)?.classList?.contains('cke_wysiwyg_div')))[0]
+												.addedNodes[0] as HTMLDivElement
+											injectInlinePopup(cke, emojis)
+										})
+									messageObserver.observe(replyMessageFooter, { childList: true, subtree: true })
+									emojifyMessageDiv(messageListItem, emojis)
+									
+								}
+							})
+						})
+					}
+				})
+				messagesContainerObserver.observe(element, { childList: true })
+			}
+		})
+	}
+	documentObserver = new MutationObserver(callback)
+	documentObserver.observe(document, config)
+}
+
 function init() {
 	// Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.handleText = function() { }
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function() { }
-
+	
 	getValidEmojis().then((emojis: string[]) => {
-		var emojisUsed = {}
-		let documentObserver: MutationObserver
-		let messagesContainerObserver: MutationObserver
-		const config = { childList: true, subtree: true }
-		const callback = (mutationsList: MutationRecord[]) => {
-			mutationsList.forEach((mr: MutationRecord) => {
-				// We are observing the whole document. Find the messages container
-				// ASAP and disconnect observing the whole document
-				// TODO: handle routing changes?
-				// TODO: what if we're on another route? We'll observe the whole document forever
-				if ([...mr.addedNodes]
-					.some((n: Node) =>
-						!!(n as HTMLDivElement)?.className &&
-						typeof (n as HTMLDivElement)?.className === 'string' &&
-						(n as HTMLDivElement)?.className.startsWith('ts-middle '))) {
-					// Found the message container parent that angular injected. Disconnect and observe the
-					// immediate parent of the individual message bodies
-					documentObserver.disconnect()
-
-					const element = ([...mr.addedNodes][0] as HTMLDivElement)?.getElementsByClassName('ts-message-list-container')[0]
-					messagesContainerObserver = new MutationObserver((messagesMutationsList: MutationRecord[]) => {
-						// We're only interested in the message body divs that get added to the DOM
-						if (messagesMutationsList.some((mr: MutationRecord) => mr.addedNodes.length > 0 &&
-							[...mr.addedNodes].some((n: Node) =>
-								!!(n as HTMLDivElement)?.className &&
-								typeof (n as HTMLDivElement)?.className === 'string' &&
-								(n as HTMLDivElement)?.className.includes('ts-message-list-item')))) {
-							const mutationRecords = messagesMutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
-							mutationRecords.forEach((mr): void => {
-								mr.addedNodes.forEach((node): void => {
-									// filter out the comment nodes
-									if (node.nodeName === 'DIV')
-										emojifyMessageDiv((node as HTMLDivElement).getElementsByClassName('message-body-content')[0], emojis, emojisUsed)
-								})
-							})
-						}
-					})
-					messagesContainerObserver.observe(element, { childList: true })
-				}
-
-			})
-		}
-		documentObserver = new MutationObserver(callback)
-		documentObserver.observe(document, config)
+		observeChanges(emojis)
+		window.addEventListener('hashchange', () => {
+			observeChanges(emojis)
+		})
 
 		injectPreviewButtons(emojis)
-
-		setInterval(() => {
-			var ckEditors = document.getElementsByClassName('cke_wysiwyg_div')
-			for (const ckEditor of ckEditors) {
-				const cke = ckEditor as HTMLDivElement
-				if (cke.getAttribute('emojiCommandListener') === null) {
-					ckEditor.setAttribute('emojiCommandListener', 'true')
-					injectInlinePopup(cke, emojis)
-				}
-			}
-		}, 1000)
-		// setInterval(() => {
-		//   if (Object.keys(emojisUsed).length <= 0) {
-		//     return
-		//   }
-		//   postEmojiUsages(emojisUsed).then((posted) => {})
-		//   emojisUsed = {}
-		// }, 10000)
 	})
 }
 
