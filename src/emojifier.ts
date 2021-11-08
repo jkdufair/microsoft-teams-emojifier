@@ -279,7 +279,6 @@ let messageItemObserver: MutationObserver | undefined
  */
 const observeChanges = (emojis: string[]) => {
 	// TODO: inject preview buttons
-	// TODO: handle expanding collapsed replies
 
 	if (!window.location.hash.includes('/conversations/')) {
 		documentObserver?.disconnect()
@@ -294,12 +293,14 @@ const observeChanges = (emojis: string[]) => {
 	}
 
 	const messageItemCallback = (mutationsList: MutationRecord[]) => {
-		emojifyMessageDiv(mutationsList[0].addedNodes[0] as Element, emojis)
+		console.debug('teamojis: reply injected')
+		mutationsList.forEach((mr: MutationRecord) => {
+			emojifyMessageDiv(mr.addedNodes[0] as Element, emojis)
+		})
 	}
 
 	// when a reply is started, inject the inline popup in the reply ckeditor
 	const messageFooterCallback = (mutationsList: MutationRecord[]) => {
-		console.log('mutationsList: ', mutationsList)
 		const cke = mutationsList.filter((mr: MutationRecord) =>
 			[...mr.addedNodes].some((n: Node) =>
 				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
@@ -331,6 +332,7 @@ const observeChanges = (emojis: string[]) => {
 					if (node.nodeName === 'DIV') {
 						// emojify the message
 						const messageListItem = ((node as HTMLDivElement).closest(`.${MESSAGE_LIST_ITEM_CLASS}`)) as Element
+						console.debug(`teamojis: message-list-item injected position ${messageListItem.getAttribute('data-scroll-pos')}`)
 						emojifyMessageDiv(messageListItem, emojis)
 
 						// watch for replies
@@ -350,7 +352,7 @@ const observeChanges = (emojis: string[]) => {
 		}
 	}
 
-	const isMessagesContainer = (mutationRecord: MutationRecord ) => {
+	const isPageContentWrapper = (mutationRecord: MutationRecord ) => {
 		return [...mutationRecord.addedNodes]
 			.some((n: Node) => {
 				const element = n as Element
@@ -362,9 +364,10 @@ const observeChanges = (emojis: string[]) => {
 	// Observe the whole document. Find the messages container ASAP and disconnect
 	const documentCallback = (mutationsList: MutationRecord[]) => {
 		mutationsList.forEach((mr: MutationRecord) => {
-			if (isMessagesContainer(mr)) {
+			if (isPageContentWrapper(mr)) {
 				// message container list parent was injected. Disconnect and observe the message-list-container for
 				// additions of individial message list items
+				console.debug('teamojis: page-content-wrapper injected')
 				documentObserver?.disconnect()
 
 				const messageListContainer = ([...mr.addedNodes][0] as Element)?.getElementsByClassName(MESSAGE_LIST_CONTAINER_CLASS)[0]
