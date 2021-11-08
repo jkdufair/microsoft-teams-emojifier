@@ -25,6 +25,13 @@ import { injectInlinePopup } from './inline-popup'
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
 const emojiClass = "EMOJIFIER-CHECKED"
+const PAGE_CONTENT_WRAPPER_ID = 'page-content-wrapper'
+const MESSAGE_LIST_CONTAINER_CLASS = 'ts-message-list-container'
+const MESSAGE_LIST_ITEM_CLASS = 'ts-message-list-item'
+const NEW_MESSAGE_CLASS = 'ts-new-message'
+const MESSAGE_CLASS = 'ts-message'
+const MESSAGE_FOOTER_CLASS = 'ts-reply-message-footer'
+const CKEDITOR_CLASS = 'cke_wysiwyg_div'
 const emojiMatch = /:([\w-_]+):/g
 
 function getValidEmojis() {
@@ -182,7 +189,7 @@ function createEmojiGrid(emojiList: string[],
 		// text has been entered
 		document.getElementsByClassName('ts-text-watermark')[0].textContent = ""
 		// don't cut off the popover in replies
-		for (const element of document.getElementsByClassName('ts-message-list-item')) {
+		for (const element of document.getElementsByClassName(MESSAGE_LIST_ITEM_CLASS)) {
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
 		emojiTableContainer.scrollTop = emojiTableContainer.scrollHeight;
@@ -224,7 +231,7 @@ function injectPreviewButton(previousPreviewButton: HTMLElement, emojiList: stri
 	} = createEmojiGrid(
 		emojiList,
 		(_: Event | null, emoji: string) => {
-			const ckEditor = (buttonContainer as HTMLElement)?.closest('.ts-new-message')?.querySelector('.cke_wysiwyg_div') as HTMLDivElement
+			const ckEditor = (buttonContainer as HTMLElement)?.closest(`.${NEW_MESSAGE_CLASS}`)?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
 			if (ckEditor)
 				emojifyInput(ckEditor, null, emoji)
 		},
@@ -249,73 +256,127 @@ function injectPreviewButton(previousPreviewButton: HTMLElement, emojiList: stri
 
 let documentObserver: MutationObserver | undefined
 let messagesContainerObserver: MutationObserver | undefined
-let messageObserver: MutationObserver | undefined
+let messageFooterObserver: MutationObserver | undefined
+let messageItemObserver: MutationObserver | undefined
 
+/**
+ * Set up a chain of MutationObservers so we can
+ * - emojify messages & replies that are created by us and others
+ * - inject the inline popup for any replies
+ *
+ * Structure of messages/containers:
+ * #page-content-wrapper (the main content that gets injected early by teams)
+ *   .ts-message-list-container (container for all message list items and "new conversation")
+ *     .ts-message-list-item (container for each message and its replies)
+ *       .ts-message (sub-container for each message and its replies)
+ *         .ts-message-thread-body
+ *           .message-body
+ *             .message-body-container
+ *               .message-body-content (the actual message)
+ *         .conversation-reply (one for each non-hidden reply)
+ *         .ts-reply-message-footer (the footer where the ckeditor pops in)
+ *           .cke_wysiwyg_div (the ckeditor itself)
+ */
 const observeChanges = (emojis: string[]) => {
+	// TODO: inject preview buttons
+	// TODO: handle expanding collapsed replies
+
 	if (!window.location.hash.includes('/conversations/')) {
 		documentObserver?.disconnect()
 		documentObserver = undefined
 		messagesContainerObserver?.disconnect()
 		messagesContainerObserver = undefined
-		messageObserver?.disconnect()
-		messageObserver = undefined
+		messageFooterObserver?.disconnect()
+		messageFooterObserver = undefined
+		messageItemObserver?.disconnect()
+		messageItemObserver = undefined
 		return
 	}
-	console.log('emo observeChanges')
-	// TODO: emojify replies
-	// TODO: inject preview buttons
-	const config = { childList: true, subtree: true }
-	const callback = (mutationsList: MutationRecord[]) => {
-		mutationsList.forEach((mr: MutationRecord) => {
-			// We are observing the whole document. Find the messages container
-			// ASAP and disconnect observing the whole document
-			if ([...mr.addedNodes]
-				.some((n: Node) =>
-					!!(n as HTMLDivElement)?.className &&
-					typeof (n as HTMLDivElement)?.className === 'string' &&
-					(n as HTMLDivElement)?.className.startsWith('ts-middle '))) {
-				// Found the message container parent that angular injected. Disconnect and observe the
-				// immediate parent of the individual message bodies
-				documentObserver?.disconnect()
 
-				const element = ([...mr.addedNodes][0] as HTMLDivElement)?.getElementsByClassName('ts-message-list-container')[0]
-				messagesContainerObserver = new MutationObserver((messagesMutationsList: MutationRecord[]) => {
-					// We're only interested in the message body divs that get added to the DOM
-					if (messagesMutationsList.some((mr: MutationRecord) => mr.addedNodes.length > 0 &&
-						[...mr.addedNodes].some((n: Node) =>
-							!!(n as HTMLDivElement)?.className &&
-							typeof (n as HTMLDivElement)?.className === 'string' &&
-							(n as HTMLDivElement)?.className.includes('ts-message-list-item')))) {
-						const mutationRecords = messagesMutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
-						mutationRecords.forEach((mr): void => {
-							mr.addedNodes.forEach((node): void => {
-								// filter out the comment nodes
-								if (node.nodeName === 'DIV') {
-									const messageListItem = ((node as HTMLDivElement).closest('.ts-message-list-item')) as Element
-									const replyMessageFooter = messageListItem.getElementsByClassName('ts-reply-message-footer')[0] as Element
-									
-									if (!messageObserver)
-										messageObserver = new MutationObserver((messageMutationList: MutationRecord[]) => {
-											const cke = messageMutationList
-												.filter((mr: MutationRecord) => [...mr.addedNodes]
-													.some((n: Node) => (n as Element)?.classList?.contains('cke_wysiwyg_div')))[0]
-												.addedNodes[0] as HTMLDivElement
-											injectInlinePopup(cke, emojis)
-										})
-									messageObserver.observe(replyMessageFooter, { childList: true, subtree: true })
-									emojifyMessageDiv(messageListItem, emojis)
-									
-								}
-							})
-						})
+	const messageItemCallback = (mutationsList: MutationRecord[]) => {
+		emojifyMessageDiv(mutationsList[0].addedNodes[0] as Element, emojis)
+	}
+
+	// when a reply is started, inject the inline popup in the reply ckeditor
+	const messageFooterCallback = (mutationsList: MutationRecord[]) => {
+		console.log('mutationsList: ', mutationsList)
+		const cke = mutationsList.filter((mr: MutationRecord) =>
+			[...mr.addedNodes].some((n: Node) =>
+				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
+		if (cke)
+			injectInlinePopup(cke, emojis)
+	}
+
+	const hasMessageListItems = (mutationsList: MutationRecord[]) => {
+		return mutationsList.some((mr: MutationRecord) =>
+			mr.addedNodes.length > 0 &&
+			[...mr.addedNodes].some((n: Node) => {
+				const element = n as Element
+				return !!element &&
+					element.className &&
+					typeof element.className === 'string' &&
+					element.className.includes(MESSAGE_LIST_ITEM_CLASS)
+			}))
+	}
+
+	// observe the message list container for additions of message list items
+	// when any are added, emojify the text in them
+	// also observe the footer and inject the inline popup if a reply is started
+	const messagesContainerObserverCallback = (mutationsList: MutationRecord[]) => {
+		if (hasMessageListItems(mutationsList)) {
+			const mutationRecords = mutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
+			mutationRecords.forEach((mr): void => {
+				mr.addedNodes.forEach((node): void => {
+					// filter out the comment nodes
+					if (node.nodeName === 'DIV') {
+						// emojify the message
+						const messageListItem = ((node as HTMLDivElement).closest(`.${MESSAGE_LIST_ITEM_CLASS}`)) as Element
+						emojifyMessageDiv(messageListItem, emojis)
+
+						// watch for replies
+						if (!messageItemObserver)
+							messageItemObserver = new MutationObserver(messageItemCallback)
+						const repliesContainer = messageListItem.getElementsByClassName(MESSAGE_CLASS)[0]
+						messageItemObserver.observe(repliesContainer, { childList: true })
+
+						// watch the reply footer for a new editor to be created. inject inline popup
+						if (!messageFooterObserver)
+							messageFooterObserver = new MutationObserver(messageFooterCallback)
+						const replyMessageFooter = messageListItem.getElementsByClassName(MESSAGE_FOOTER_CLASS)[0] as Element
+						messageFooterObserver.observe(replyMessageFooter, { childList: true, subtree: true })
 					}
 				})
-				messagesContainerObserver.observe(element, { childList: true })
+			})
+		}
+	}
+
+	const isMessagesContainer = (mutationRecord: MutationRecord ) => {
+		return [...mutationRecord.addedNodes]
+			.some((n: Node) => {
+				const element = n as Element
+				return !!element &&
+					element.id === PAGE_CONTENT_WRAPPER_ID
+			})
+	}
+
+	// Observe the whole document. Find the messages container ASAP and disconnect
+	const documentCallback = (mutationsList: MutationRecord[]) => {
+		mutationsList.forEach((mr: MutationRecord) => {
+			if (isMessagesContainer(mr)) {
+				// message container list parent was injected. Disconnect and observe the message-list-container for
+				// additions of individial message list items
+				documentObserver?.disconnect()
+
+				const messageListContainer = ([...mr.addedNodes][0] as Element)?.getElementsByClassName(MESSAGE_LIST_CONTAINER_CLASS)[0]
+				messagesContainerObserver = new MutationObserver(messagesContainerObserverCallback)
+				messagesContainerObserver.observe(messageListContainer, { childList: true })
 			}
 		})
 	}
-	documentObserver = new MutationObserver(callback)
-	documentObserver.observe(document, config)
+
+	
+	documentObserver = new MutationObserver(documentCallback)
+	documentObserver.observe(document, { childList: true, subtree: true })
 }
 
 function init() {
@@ -324,14 +385,12 @@ function init() {
 	teamspace.services.EmoticonPickerHandler.prototype.handleText = function() { }
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function() { }
-	
+
 	getValidEmojis().then((emojis: string[]) => {
 		observeChanges(emojis)
 		window.addEventListener('hashchange', () => {
 			observeChanges(emojis)
 		})
-
-		injectPreviewButtons(emojis)
 	})
 }
 
