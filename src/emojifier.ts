@@ -21,10 +21,10 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
 // TODO: Get enter working for completion from inline popup
+// TODO: get inline popup mousover working again
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
-const emojiClass = "EMOJIFIER-CHECKED"
 const PAGE_CONTENT_WRAPPER_ID = 'page-content-wrapper'
 const MESSAGE_LIST_CONTAINER_CLASS = 'ts-message-list-container'
 const MESSAGE_LIST_ITEM_CLASS = 'ts-message-list-item'
@@ -32,6 +32,7 @@ const NEW_MESSAGE_CLASS = 'ts-new-message'
 const MESSAGE_CLASS = 'ts-message'
 const MESSAGE_FOOTER_CLASS = 'ts-reply-message-footer'
 const CKEDITOR_CLASS = 'cke_wysiwyg_div'
+const EMOJI_BUTTON_NODE_NAME = 'INPUT-EXTENSION-EMOJI-V2'
 const emojiMatch = /:([\w-_]+):/g
 
 function getValidEmojis() {
@@ -94,7 +95,6 @@ function emojifyMessageDiv(div: Element, validEmojis: string[]) {
 			validEmojis
 		)
 	})
-	div.classList.add(emojiClass)
 }
 
 function generateFilterBox(onFilterChange: { (newFilter: string): void },
@@ -202,21 +202,7 @@ function createEmojiGrid(emojiList: string[],
 	}
 }
 
-function getEmojiPreviewButtonList() {
-	return $(
-		"input-extension-emoji-v2 > button:not(." + emojiClass + ")"
-	).toArray()
-}
-
-function injectPreviewButtons(emojiList: string[]) {
-	var emojiButtons = getEmojiPreviewButtonList()
-	emojiButtons.forEach((button) => {
-		injectPreviewButton(button, emojiList)
-	})
-}
-
-function injectPreviewButton(previousPreviewButton: HTMLElement, emojiList: string[]) {
-	previousPreviewButton.classList.add(emojiClass)
+function injectPreviewButton(previousPreviewButton: Element, emojiList: string[]) {
 	// Clone the control to disconnect all event listeners
 	var emojiCloned = previousPreviewButton.cloneNode(true)
 	var buttonContainer = previousPreviewButton.parentNode
@@ -278,8 +264,6 @@ let messageItemObserver: MutationObserver | undefined
  *           .cke_wysiwyg_div (the ckeditor itself)
  */
 const observeChanges = (emojis: string[]) => {
-	// TODO: inject preview buttons
-
 	if (!window.location.hash.includes('/conversations/')) {
 		documentObserver?.disconnect()
 		documentObserver = undefined
@@ -300,12 +284,25 @@ const observeChanges = (emojis: string[]) => {
 	}
 
 	// when a reply is started, inject the inline popup in the reply ckeditor
-	const messageFooterCallback = (mutationsList: MutationRecord[]) => {
+	// and the replacement preview button
+	const messageFooterCallback = (mutationsList: MutationRecord[]): void => {
 		const cke = mutationsList.filter((mr: MutationRecord) =>
 			[...mr.addedNodes].some((n: Node) =>
 				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
 		if (cke)
 			injectInlinePopup(cke, emojis)
+
+		// Teams seems to add and remove the emoji button 3 times or something.
+		// The one where it's added and previous is removed is the one
+		const candidateMutationRecords = mutationsList.filter((mr: MutationRecord) =>
+			[...mr.addedNodes].some((n: Node) => {
+				const inputExtension = n as Element
+				return !!inputExtension && inputExtension.nodeName === EMOJI_BUTTON_NODE_NAME
+			}) && [...mr.removedNodes].length > 0)
+		if (candidateMutationRecords.length > 0) {
+			const emojiButton = candidateMutationRecords[0].addedNodes[0].childNodes[2] as Element
+			injectPreviewButton(emojiButton, emojis)
+		}
 	}
 
 	const hasMessageListItems = (mutationsList: MutationRecord[]) => {

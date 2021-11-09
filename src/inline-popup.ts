@@ -28,8 +28,6 @@ interface EmojiChangeListener {
 
 const inlinePopupClassName = 'emoji-inline-popup'
 const hiddenEmojiMatch = /<img class="emoji-img" src="http.+?\/emoji\/(.*?)">/g
-// TODO: Remove this duplicate
-const emojiClass = "EMOJIFIER-CHECKED"
 
 const unemojifyInput = (ckEditor: HTMLElement) => {
 	ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:")
@@ -41,7 +39,7 @@ const unemojifyInput = (ckEditor: HTMLElement) => {
  *
  * @param rangeData The string in which to look for a command
  */
-const getCommand = (rangeData: string | undefined): string | undefined  => {
+const getCommand = (rangeData: string | undefined): string | undefined => {
 	if (!rangeData) return undefined
 
 	const matchWholeCommand = rangeData.match(/:(.+):/)
@@ -83,11 +81,12 @@ const createInlinePopup = (emojiList: string[],
 
 			popup.appendChild(div)
 
-			// div.addEventListener("mouseover", event => {
-			// 	const title = ((event.target as HTMLDivElement).firstChild as HTMLImageElement)?.title
-			// 	if (title)
-			// 		emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(filteredEmojis.indexOf(title), false) })
-			// })
+			div.addEventListener("mouseover", event => {
+				const title = ((event.target as HTMLDivElement).firstChild as HTMLImageElement)?.title
+				console.log('teamojis title: ', title)
+				// if (title)
+				// 	emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(filteredEmojis.indexOf(title), false) })
+			})
 
 			const highlightHandler = (index: number, shouldScroll?: boolean) => {
 				if (results.map(r => r.target).indexOf(emoji) == index) {
@@ -172,7 +171,6 @@ const createInlinePopup = (emojiList: string[],
 }
 
 export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[]) => {
-	ckEditor.classList.add(emojiClass)
 	const {
 		element: inlinePopup,
 		onOpen,
@@ -231,24 +229,24 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 		}
 	})
 
+	// put listener on submit button if not already there
+	const footerElement = ckEditor.closest('.ts-new-message-footer')
+	if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
+		footerElement.setAttribute('emojiSubmitListener', 'true')
+		const extensionIconsContainerElement = footerElement.nextElementSibling
+		if (extensionIconsContainerElement) {
+			const button = extensionIconsContainerElement.querySelector('.icons-send.inset-border')
+			if (button) {
+				button.addEventListener('mousedown', () => {
+					unemojifyInput(ckEditor)
+				})
+			}
+		}
+	}
+
 	ckEditor.addEventListener("keyup", (e: Event) => {
 		const selection = window.getSelection()
 		const commandRange = selection?.getRangeAt(0)
-
-		// put listener on submit button if not already there
-		const footerElement = ckEditor.closest('.ts-new-message-footer')
-		if (footerElement && !footerElement.getAttribute('emojiSubmitListener')) {
-			footerElement.setAttribute('emojiSubmitListener', 'true')
-			const extensionIconsContainerElement = footerElement.nextElementSibling
-			if (extensionIconsContainerElement) {
-				const button = extensionIconsContainerElement.querySelector('.icons-send.inset-border')
-				if (button) {
-					button.addEventListener('mousedown', () => {
-						unemojifyInput(ckEditor)
-					})
-				}
-			}
-		}
 
 		const event = e as KeyboardEvent
 		if (event.key === 'ArrowDown' && isOpen) {
