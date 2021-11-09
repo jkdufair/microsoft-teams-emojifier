@@ -21,7 +21,6 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
 // TODO: Get enter working for completion from inline popup
-// TODO: get inline popup mousover working again
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH

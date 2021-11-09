@@ -83,9 +83,10 @@ const createInlinePopup = (emojiList: string[],
 
 			div.addEventListener("mouseover", event => {
 				const title = ((event.target as HTMLDivElement).firstChild as HTMLImageElement)?.title
-				console.log('teamojis title: ', title)
-				// if (title)
-				// 	emojiChangeListeners.forEach(handlers => { handlers.highlightHandler(filteredEmojis.indexOf(title), false) })
+				if (title)
+					emojiChangeListeners.forEach(handlers => {
+						handlers.highlightHandler(results.findIndex((result: Result) => result.target === title), false)
+					})
 			})
 
 			const highlightHandler = (index: number, shouldScroll?: boolean) => {
