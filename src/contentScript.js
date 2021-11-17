@@ -9,5 +9,5 @@ chrome.storage.sync.get("api-url", data => {
     this.remove();
 	};
 	(document.head || document.documentElement).appendChild(s1);
-	(document.head || document.documentElement).appendChild(s2);	
+	(document.head || document.documentElement).appendChild(s2);
 })

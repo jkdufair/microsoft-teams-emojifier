@@ -20,6 +20,11 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
 // TODO: Get enter working for completion from inline popup
+// TODO: Editing a message or reply - no inline popup. And :stupit: Teams emojis instead :eww:
+// TODO: Sometimes not loading on startup
+// TODO: First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
+// TODO: Handle non-square emojis in grid better than forcing them to be square
+// TODO: Handle hashchange better (navigate to "Teams" on sidebar then come back. No workie anymore)
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
@@ -42,15 +47,9 @@ function getValidEmojis() {
 	})
 }
 
-function createImgTag(emoticonName: string) {
+function createImgTag(emoticonName: string, shouldBeSquare = false) {
 	return (
-		'<img class="emoji-img" src="' +
-		emojiApiPath +
-		"/emoji/" +
-		emoticonName +
-		'" title="' +
-		emoticonName +
-		'" loading="lazy">'
+		`<img class="emoji-img${shouldBeSquare ? ' square' : ''}" src="${emojiApiPath}/emoji/${emoticonName}" title="${emoticonName}" loading="lazy">`
 	)
 }
 
@@ -156,7 +155,7 @@ function createEmojiGrid(emojiList: string[],
 	)
 	emojiFilterChangeListeners = emojiList.map((emoji) => {
 		const emojiElement = createElementFromHTML(
-			createImgTag(emoji)
+			createImgTag(emoji, true)
 		) as HTMLImageElement
 		if (emojiElement) {
 			emojiElement.addEventListener("click", (event) => {
@@ -279,8 +278,7 @@ const observeChanges = (emojis: string[]) => {
 	}
 
 	const messageItemCallback = (mutationsList: MutationRecord[]) => {
-		console.debug('teamojis: reply injected')
-		console.debug('teamojis: messageItemCallback mutationsList', mutationsList)
+		console.log('teamojis: reply injected')
 		mutationsList.forEach((mr: MutationRecord) => {
 			emojifyMessageDiv(mr.addedNodes[0] as Element, emojis)
 		})
@@ -288,13 +286,14 @@ const observeChanges = (emojis: string[]) => {
 
 	// when a reply is started, inject the inline popup in the reply ckeditor
 	// and the replacement preview button
-	const messageCallback = (mutationsList: MutationRecord[]): void => {
-		console.debug('teamojis: messageFooterCallback mutationsList', mutationsList)
+	const messageFooterCallback = (mutationsList: MutationRecord[]): void => {
 		const cke = mutationsList.filter((mr: MutationRecord) =>
 			[...mr.addedNodes].some((n: Node) =>
 				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
-		if (cke)
+		if (cke) {
+			console.log('teamojis: Injecting inline popup for ckEditor')
 			injectInlinePopup(cke, emojis)
+		}
 
 		// Teams seems to add and remove the emoji button 3 times or something.
 		// The one where it's added and previous is removed is the one
@@ -325,7 +324,6 @@ const observeChanges = (emojis: string[]) => {
 	// when any are added, emojify the text in them
 	// also observe the footer and inject the inline popup if a reply is started
 	const messagesContainerCallback = (mutationsList: MutationRecord[]) => {
-		console.debug('teamojis: messagesContainerCallback mutationsList', mutationsList)
 		if (hasMessageListItems(mutationsList)) {
 			const mutationRecords = mutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
 			mutationRecords.forEach((mr): void => {
@@ -334,7 +332,7 @@ const observeChanges = (emojis: string[]) => {
 					if (node.nodeName === 'DIV') {
 						// emojify the message
 						const messageListItem = ((node as HTMLDivElement).closest(`.${MESSAGE_LIST_ITEM_CLASS}`)) as Element
-						console.debug(`teamojis: message-list-item injected position ${messageListItem.getAttribute('data-scroll-pos')}`)
+						console.log(`teamojis: .message-list-item injected at position ${messageListItem.getAttribute('data-scroll-pos')}`)
 						emojifyMessageDiv(messageListItem, emojis)
 
 						// watch for replies
@@ -345,7 +343,7 @@ const observeChanges = (emojis: string[]) => {
 
 						// watch the reply footer for a new editor to be created. inject inline popup
 						if (!messageFooterObserver)
-							messageFooterObserver = new MutationObserver(messageCallback)
+							messageFooterObserver = new MutationObserver(messageFooterCallback)
 						const replyMessageFooter = messageListItem.getElementsByClassName(MESSAGE_FOOTER_CLASS)[0] as Element
 						messageFooterObserver.observe(replyMessageFooter, { childList: true, subtree: true })
 					}
@@ -365,30 +363,39 @@ const observeChanges = (emojis: string[]) => {
 
 	// Observe the whole document. Find the messages container ASAP and disconnect
 	const documentCallback = (mutationsList: MutationRecord[]) => {
-		console.debug('teamojis: documentCallback mutationsList', mutationsList)
 		mutationsList.forEach((mr: MutationRecord) => {
 			if (isPageContentWrapper(mr)) {
 				// message container list parent was injected. Disconnect and observe the message-list-container for
 				// additions of individial message list items
-				console.debug('teamojis: page-content-wrapper injected')
+				console.log('teamojis: .page-content-wrapper injected. Disconnecting document observer.')
 				documentObserver?.disconnect()
 
 				// observe for new messages in the list
-				const messageListContainer = ([...mr.addedNodes][0] as Element)?.getElementsByClassName(MESSAGE_LIST_CONTAINER_CLASS)[0]
-				messagesContainerObserver = new MutationObserver(messagesContainerCallback)
-				messagesContainerObserver.observe(messageListContainer, { childList: true })
+				// first added node should be the page-content-wrapper div, second should be a comment (ignored)
+				const pageContentWrapper = [...mr.addedNodes][0] as Element
+				if (!pageContentWrapper) {
+					console.log('teamojis error: pageContentWrapper not added as the first node!')
+				} else {
+					console.log('teamojis: Observing mutations for .message-list-container')
+					const messageListContainer = pageContentWrapper.getElementsByClassName(MESSAGE_LIST_CONTAINER_CLASS)[0]
+					messagesContainerObserver = new MutationObserver(messagesContainerCallback)
+					messagesContainerObserver.observe(messageListContainer, { childList: true })
+				}
 
-				// observe for composing new messages
+				// Observe for composing new messages. We have to observe the whole #add-new-message since
+				// the ckeditor gets injected dynamically later than this point in the apps DOM
+				// construction.
+				console.log('teamojis: Observing mutations for #add-new-message')
 				const newMessageContainer = document.getElementById(NEW_MESSAGE_ID) as HTMLElement
-				newMessageObserver = new MutationObserver(messageCallback)
+				newMessageObserver = new MutationObserver(messageFooterCallback)
 				newMessageObserver.observe(newMessageContainer, { childList: true, subtree: true })
-
 			}
 		})
 	}
 
 	documentObserver = new MutationObserver(documentCallback)
 	documentObserver.observe(document, { childList: true, subtree: true })
+	console.log('teamojis: Observing whole document')
 }
 
 function init() {

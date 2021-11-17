@@ -5,9 +5,13 @@
 
 .emoji-img {
   height: 24px !important;
-  width: 24px !important;
+  width: inherit !important;
   display: inline-block;
   position: static !important;
+
+	&.square {
+		width: 24px !important;
+	}
 }
 
 .emoji-inline-popup {
