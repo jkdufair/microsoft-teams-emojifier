@@ -9,7 +9,7 @@ const emojiApiPath = EMOJI_API_PATH
  * @param commandText - the command (possibly incomplete) they have typed (i.e. :arn or :arnold)
  * @param emoji - the name of the emoji to use in the img tag
  */
-export const emojifyInput = (ckEditor: HTMLDivElement, commandText: string | null, emoji: string) => {
+export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | null, emoji: string) => {
 	ckEditor?.parentNode?.normalize()
 	ckEditor.focus()
 	let selection = window.getSelection()
@@ -27,7 +27,7 @@ export const emojifyInput = (ckEditor: HTMLDivElement, commandText: string | nul
 		// insert img tag for emoji
 		const emojiImage = document.createElement('img')
 		emojiImage.classList.add('emoji-img')
-		emojiImage.src = `https://emoji-server.azurewebsites.net/emoji/${emoji.replaceAll(':', '')}`
+		emojiImage.src = `${emojiApiPath}/emoji/${emoji.replaceAll(':', '')}`
 		commandRange.insertNode(emojiImage)
 
 		// Put cursor after emoji

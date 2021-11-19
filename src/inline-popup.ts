@@ -1,5 +1,5 @@
 import fuzzysort from 'fuzzysort'
-import { emojifyInput, createElementFromHTML, createImgTag } from './shared'
+import { emojifyCommand, createElementFromHTML, createImgTag } from './shared'
 
 // fuzzysort does not appear to export types - replicating here
 interface Result {
@@ -183,7 +183,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 	} = createInlinePopup(
 		emojiList,
 		(_: Event | null, commandText: string, emoji: string) => {
-			emojifyInput(ckEditor, commandText, emoji)
+			emojifyCommand(ckEditor, commandText, emoji)
 		}
 	)
 
@@ -224,7 +224,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 			if (command) {
 				e.preventDefault()
 				e.stopPropagation()
-				emojifyInput(ckEditor, `:${command}`, getHighlightedEmoji())
+				emojifyCommand(ckEditor, `:${command}`, getHighlightedEmoji())
 				closeIfOpen()
 			}
 		}
@@ -298,7 +298,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 			// replace emoji text with hidden div & the emoji image
 			if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
 				event.preventDefault()
-				emojifyInput(ckEditor, `:${command}:`, command)
+				emojifyCommand(ckEditor, `:${command}:`, command)
 			}
 		}
 
