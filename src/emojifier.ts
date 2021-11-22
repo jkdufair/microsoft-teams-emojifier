@@ -20,11 +20,11 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
 // TODO: Get enter working for completion from inline popup
-// TODO: Editing a message or reply - no inline popup. And :stupit: Teams emojis instead :eww:
 // TODO: Sometimes not loading on startup
 // TODO: First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
 // TODO: Handle non-square emojis in grid better than forcing them to be square
 // TODO: Handle hashchange better (navigate to "Teams" on sidebar then come back. No workie anymore)
+// TODO: Inline popup in middle of message not working
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
@@ -280,15 +280,31 @@ const observeChanges = (emojis: string[]) => {
 		return
 	}
 
+	const hasMessageBody = (mutationsList: MutationRecord[]) => {
+		return mutationsList.some((mr: MutationRecord) =>
+			mr.addedNodes.length > 0 &&
+			[...mr.addedNodes].some((n: Node) => {
+				const element = n as Element
+				return !!element &&
+					element.className &&
+					typeof element.className === 'string' &&
+					element.className.includes('message-body')
+			}))
+	}
+
+	/**
+	 * Callback for when message is being edited.
+	 */ 
 	const messageListItemCallback = (mutationsList: MutationRecord[]) => {
 		// TODO un-copy-pasta this
-		const mutationRecord = mutationsList.filter((mr: MutationRecord) =>
+		// Editing has started. Re-emojify the commands & inject the inline popup
+		const cke = mutationsList.filter((mr: MutationRecord) =>
 			[...mr.addedNodes].some((n: Node) =>
-				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]
-		const cke = mutationRecord?.addedNodes[0] as HTMLDivElement
+				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
 		if (cke) {
 			// Injection of content seems to happen later. Bit of a hack here.
 			setTimeout(() => {
+				console.log('teamojis: Edit started. Injecting images and inline popup.')
 				const editMessageForm = cke.closest('.edit-message-form') as HTMLDivElement
 				if (editMessageForm)
 					editMessageForm.style.overflow = 'visible'
@@ -298,6 +314,25 @@ const observeChanges = (emojis: string[]) => {
 				cke.innerHTML = injectEmojiImages(cke.innerHTML, emojis)
 				injectInlinePopup(cke, emojis)
 			}, 100)
+		} else {
+			const addedNode = mutationsList.filter((mr: MutationRecord) => {
+				return !!mr.addedNodes && [...mr.addedNodes].some((n: Node) => {
+					const element = n as Element
+					return !!element &&
+						element.className &&
+						typeof element.className === 'string' &&
+						// TODO use classList here and everywhere
+						// TODO use const for class name
+						element.className.includes('message-body ')
+				})
+			})[0]?.addedNodes[0] as HTMLDivElement
+			if (addedNode) {
+				// Teams seems to re-render this after we try to re-emojify it. :sadparrot:
+				setTimeout(() => {
+					console.log('teamojis: Editing finished. Re-emojifying message')
+					emojifyMessageDiv(addedNode.closest(`.${MESSAGE_LIST_ITEM_CLASS}`) as Element, emojis)
+				}, 750)
+			}
 		}
 	}
 
@@ -308,8 +343,10 @@ const observeChanges = (emojis: string[]) => {
 		})
 	}
 
-	// when a reply is started, inject the inline popup in the reply ckeditor
-	// and the replacement preview button
+	/**
+	 * Callback for new replies. When a reply is started, inject the inline popup in the reply
+	 * ckeditor and the replacement preview button.
+	*/ 
 	const messageFooterCallback = (mutationsList: MutationRecord[]): void => {
 		const cke = mutationsList.filter((mr: MutationRecord) =>
 			[...mr.addedNodes].some((n: Node) =>

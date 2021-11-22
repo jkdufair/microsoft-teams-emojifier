@@ -27,7 +27,7 @@ interface EmojiChangeListener {
 }
 
 const inlinePopupClassName = 'emoji-inline-popup'
-const hiddenEmojiMatch = /<img class="emoji-img" src="http.+?\/emoji\/(.*?)">/g
+const hiddenEmojiMatch = /<img class="emoji-img" src="http.+?\/emoji\/(.*?)".*?>/g
 
 const unemojifyInput = (ckEditor: HTMLElement) => {
 	ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:")
