@@ -3,7 +3,8 @@
 ** TODO Reactions
 ** TODO Style grid popup a bit nicer
 ** TODO Load some/all basic emojis into server
-** TODO Periodic emoji refresh
+** DONE Periodic emoji refresh
+CLOSED: [2021-11-23 Tue 13:37]
 
 * Nice to have someday
 ** TODO Large emoji when no text

@@ -1,6 +1,10 @@
 import fuzzysort from 'fuzzysort'
 import { emojifyCommand, createImgTag } from './shared'
 
+declare global {
+	var emojis: string[]
+}
+
 // fuzzysort does not appear to export types - replicating here
 interface Result {
 	/**
@@ -56,11 +60,9 @@ const getCommand = (rangeData: string | undefined): string | undefined => {
 
 /**
  * Create the element that displays and handles the inline emoji popup.
- * @param emojis - the list of emoji names
  * @param emojiSelectedListener - the function to execute when the emoji is chosen
  */ 
-const createInlinePopup = (emojis: string[],
-	emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) => {
+const createInlinePopup = (emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) => {
 	const popup = document.createElement('div')
 	popup.classList.add(inlinePopupClassName)
 	let highlightedIndex = 0
@@ -128,7 +130,7 @@ const createInlinePopup = (emojis: string[],
 	}
 
 	const onFilter = (toFilter: string) => {
-		fuzzySorted = fuzzysort.go(toFilter, emojis)
+		fuzzySorted = fuzzysort.go(toFilter, globalThis.emojis)
 		if (fuzzySorted.total > 0) {
 			injectFilteredElements(toFilter, fuzzySorted)
 			popup.style.display = "block"
@@ -180,9 +182,8 @@ const createInlinePopup = (emojis: string[],
 /**
  * Add the inlive popup and child elements to the DOM with listeners.
  * @param ckEditor - the ckEditor control div
- * @param emojis - the list of emoji names
  */
-export const injectInlinePopup = (ckEditor: HTMLDivElement, emojis: string[]) => {
+export const injectInlinePopup = (ckEditor: HTMLDivElement) => {
 	const {
 		element: inlinePopup,
 		onOpen,
@@ -192,7 +193,6 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojis: string[]) =>
 		onHighlightPrevious,
 		getHighlightedEmoji
 	} = createInlinePopup(
-		emojis,
 		(_: Event | null, commandText: string, emoji: string) => {
 			emojifyCommand(ckEditor, commandText, emoji)
 		}
@@ -305,7 +305,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojis: string[]) =>
 				isOpen = false
 			}
 			// replace emoji text with hidden div & the emoji image
-			if (ckEditor.innerHTML && emojis.indexOf(command) != -1) {
+			if (ckEditor.innerHTML && globalThis.emojis.indexOf(command) != -1) {
 				event.preventDefault()
 				emojifyCommand(ckEditor, `:${command}:`, command)
 			}

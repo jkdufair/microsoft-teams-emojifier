@@ -2,6 +2,10 @@ import { CKEDITOR_CLASS, createImgTag, MESSAGE_LIST_ITEM_CLASS } from './shared'
 import { injectInlinePopup } from './inline-popup'
 import { injectGridPopupButton } from './grid-popup'
 
+declare global {
+	var emojis: string[]
+}
+
 // Note: An emoji "command" is the name of the emoji surrounded by colons
 
 // @ts-ignore defined via injection in contentScript.js
@@ -13,19 +17,6 @@ const MESSAGE_CLASS = 'ts-message'
 const MESSAGE_FOOTER_CLASS = 'ts-reply-message-footer'
 const EMOJI_BUTTON_NODE_NAME = 'INPUT-EXTENSION-EMOJI-V2'
 const emojiMatch = /:([\w-_]+):/g
-
-/**
- * Fetch the emojis from the server then run resolve function with the list of the names.
- */
-const getValidEmojis = () => {
-	return new Promise((resolve: (emojis: string[]) => void, _) => {
-		console.log('teamojis: fetching emojis')
-		$.get(emojiApiPath + "/emojis", (result: string[]) => {
-			console.log('teamojis: emojis fetched')
-			resolve(result.sort())
-		})
-	})
-}
 
 /**
  * Utility function to execute a function on all children (recursive) of a DOM node.
@@ -45,9 +36,8 @@ const crawlTree = (element: Element, handleLeaf: { (leaf: Element): void }) => {
 /**
  * Given a string (normally some innerHTML), replace emoji commands with img tags.
  * @param text - the text to operate on
- * @param emojis - the list of emoji names
  */
-const emojifyText = (text: string, emojis: string[]) => {
+const emojifyText = (text: string) => {
   var resultStr = ""
 	var matches = text.matchAll(emojiMatch)
 	var currentIndexInInput = 0
@@ -72,13 +62,11 @@ const emojifyText = (text: string, emojis: string[]) => {
 /**
  * Recursively replace any emoji commands in an element with img tags
  * @param element - The parent element to recurs
- * @param emojis - the list of emoji names
  */
-const emojifyMessageDiv = (element: Element, emojis: string[]) => {
+const emojifyMessageDiv = (element: Element) => {
 	crawlTree(element, (leaf: Element) => {
 		leaf.innerHTML = emojifyText(
-			leaf.innerHTML,
-			emojis
+			leaf.innerHTML
 		)
 	})
 }
@@ -113,7 +101,7 @@ let newMessageObserver: MutationObserver | undefined
  *
  * @param emojis - the list of emoji names
  */
-const observeChanges = (emojis: string[]) => {
+const observeChanges = () => {
 	if (!window.location.hash.includes('/conversations/')) {
 		documentObserver?.disconnect()
 		documentObserver = undefined
@@ -149,8 +137,8 @@ const observeChanges = (emojis: string[]) => {
 				const tsMessageThreadBody = editMessageForm.parentElement as HTMLDivElement
 				if (tsMessageThreadBody)
 					tsMessageThreadBody.style.overflow = 'visible'
-				cke.innerHTML = emojifyText(cke.innerHTML, emojis)
-				injectInlinePopup(cke, emojis)
+				cke.innerHTML = emojifyText(cke.innerHTML)
+				injectInlinePopup(cke)
 			}, 100)
 		} else {
 			const addedNode = mutationsList.filter((mr: MutationRecord) => {
@@ -168,7 +156,7 @@ const observeChanges = (emojis: string[]) => {
 				// Teams seems to re-render this after we try to re-emojify it. :sadparrot:
 				setTimeout(() => {
 					console.log('teamojis: Editing finished. Re-emojifying message')
-					emojifyMessageDiv(addedNode.closest(`.${MESSAGE_LIST_ITEM_CLASS}`) as Element, emojis)
+					emojifyMessageDiv(addedNode.closest(`.${MESSAGE_LIST_ITEM_CLASS}`) as Element)
 				}, 750)
 			}
 		}
@@ -177,7 +165,7 @@ const observeChanges = (emojis: string[]) => {
 	const messageItemReplyCallback = (mutationsList: MutationRecord[]) => {
 		console.log('teamojis: reply injected')
 		mutationsList.forEach((mr: MutationRecord) => {
-			emojifyMessageDiv(mr.addedNodes[0] as Element, emojis)
+			emojifyMessageDiv(mr.addedNodes[0] as Element)
 		})
 	}
 
@@ -191,7 +179,7 @@ const observeChanges = (emojis: string[]) => {
 				(n as Element)?.classList?.contains(CKEDITOR_CLASS)))[0]?.addedNodes[0] as HTMLDivElement
 		if (cke) {
 			console.log('teamojis: Injecting inline popup for ckEditor')
-			injectInlinePopup(cke, emojis)
+			injectInlinePopup(cke)
 		}
 
 		// Teams seems to add and remove the emoji button 3 times or something.
@@ -203,7 +191,7 @@ const observeChanges = (emojis: string[]) => {
 			}) && [...mr.removedNodes].length > 0)
 		if (candidateMutationRecords.length > 0) {
 			const emojiButton = candidateMutationRecords[0].addedNodes[0].childNodes[2] as Element
-			injectGridPopupButton(emojiButton, emojis)
+			injectGridPopupButton(emojiButton)
 		}
 	}
 
@@ -232,7 +220,7 @@ const observeChanges = (emojis: string[]) => {
 						// Emojify the message
 						const messageListItem = ((node as HTMLDivElement).closest(`.${MESSAGE_LIST_ITEM_CLASS}`)) as Element
 						console.log(`teamojis: .message-list-item injected at position ${messageListItem.getAttribute('data-scroll-pos')}`)
-						emojifyMessageDiv(messageListItem, emojis)
+						emojifyMessageDiv(messageListItem)
 
 						// Watch for replies
 						if (!messageItemReplyObserver)
@@ -271,7 +259,7 @@ const observeChanges = (emojis: string[]) => {
 		} else {
 			// Emojify the messages that have already been injected
 			for (const messageListItem of document.getElementsByClassName(MESSAGE_LIST_ITEM_CLASS)) {
-				emojifyMessageDiv(messageListItem, emojis)
+				emojifyMessageDiv(messageListItem)
 			}
 			console.log('teamojis: Observing mutations for .message-list-container')
 			const messageListContainer = pageContentWrapper.getElementsByClassName(MESSAGE_LIST_CONTAINER_CLASS)[0]
@@ -319,6 +307,26 @@ const observeChanges = (emojis: string[]) => {
 }
 
 /**
+ * Get emojis from the server then set them in the global var, and, optionally, perform an
+ * action.
+ * @param afterFetch - the action to perform after the emojis are fetched
+ */
+const fetchEmojis = (afterFetch: (() => void) | undefined = undefined) => {
+	fetch(`${emojiApiPath}/emojis`)
+		.then(response => {
+			response.json()
+				.then(data => {
+					globalThis.emojis = data as string[]
+					if (afterFetch)
+						afterFetch()
+				})
+		})
+		.catch(_ => {
+			console.error('teamojis: error loading emojis')
+		})	
+}
+
+/**
  * Disable some built-in Teams :eww: stuff. Get the emojis and set up the Teamojinator for action!
  */
 const init = () => {
@@ -328,12 +336,15 @@ const init = () => {
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function() { }
 
-	getValidEmojis().then((emojis: string[]) => {
-		observeChanges(emojis)
+	fetchEmojis(() => {
+		observeChanges()
 		window.addEventListener('hashchange', () => {
-			observeChanges(emojis)
+			observeChanges()
 		})
 	})
+
+	// re-fetch the emojis every minute
+	setInterval(fetchEmojis, 1000 * 60)
 }
 
 init()

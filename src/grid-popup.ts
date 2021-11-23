@@ -1,5 +1,9 @@
 import { CKEDITOR_CLASS, createImgTag, emojifyCommand, MESSAGE_LIST_ITEM_CLASS } from './shared'
 
+declare global {
+	var emojis: string[]
+}
+
 const NEW_MESSAGE_CLASS = 'ts-new-message'
 
 /**
@@ -37,12 +41,10 @@ const generateFilterBox = (onFilterChange: { (newFilter: string): void },
 
 /**
  * Create the element that displays and handles the emoji grid popup.
- * @param emojis - the list of emoji names
  * @param emojiSelectedListener - the function to execute when the emoji is chosen
  * @param closeListener - the function to execute when the popup is closed
  */ 
-const createEmojiGrid = (emojis: string[],
-	emojiSelectedListener: { (event: Event | null, emoji: string): void },
+const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: string): void },
 	closeListener: { (event: Event | undefined): void }) => {
 	const table = document.createElement("div")
 	table.classList.add("emoji-flex-table")
@@ -62,13 +64,13 @@ const createEmojiGrid = (emojis: string[],
 		},
 		500,
 		(selectedFilter: string) => {
-			var emoji = emojis.find((emoji) => emoji.includes(selectedFilter))
+			var emoji = globalThis.emojis.find((emoji) => emoji.includes(selectedFilter))
 			if (emoji)
 				emojiSelectedListener(null, emoji)
 			onClose()
 		}
 	)
-	emojiFilterChangeListeners = emojis.map((emoji) => {
+	emojiFilterChangeListeners = globalThis.emojis.map((emoji) => {
 		const emojiElement = createImgTag(emoji, true)
 		if (emojiElement) {
 			emojiElement.addEventListener("click", (event) => {
@@ -116,9 +118,8 @@ const createEmojiGrid = (emojis: string[],
 /**
  * Add the grid popup button and child elements to the DOM with listeners.
  * @param existingPreviewButton - Teams' emoji grid popup button :eww:
- * @param emojis - the list of emoji names
  */
-export const injectGridPopupButton = (existingPreviewButton: Element, emojis: string[]) => {
+export const injectGridPopupButton = (existingPreviewButton: Element) => {
 	// Clone the control to disconnect all event listeners
 	var emojiCloned = existingPreviewButton.cloneNode(true)
 	var buttonContainer = existingPreviewButton.parentNode
@@ -131,8 +132,7 @@ export const injectGridPopupButton = (existingPreviewButton: Element, emojis: st
 		onOpen,
 		onClose,
 	} = createEmojiGrid(
-		emojis,
-		(_: Event | null, emoji: string) => {
+    (_: Event | null, emoji: string) => {
 			const ckEditor = (buttonContainer as HTMLElement)?.closest(`.${NEW_MESSAGE_CLASS}`)?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
 			if (ckEditor)
 				emojifyCommand(ckEditor, null, emoji)
