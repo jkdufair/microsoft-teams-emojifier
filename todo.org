@@ -1,0 +1,30 @@
+* Required Features
+** TODO Fix electron install
+** TODO Reactions
+** TODO Style grid popup a bit nicer
+** TODO Load some/all basic emojis into server
+** TODO Periodic emoji refresh
+
+* Nice to have someday
+** TODO Large emoji when no text
+** TODO Emoji server auth
+** TODO alt text & popover for emojis
+** TODO MRU
+** TODO Websocket push when new emoji added
+** TODO Add emojis to server with "{pasted image}+:emojiname:"
+
+* Bugs
+** Inline popup
+*** TODO Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
+*** TODO Get enter working for completion from inline popup (might not be possible)
+*** TODO Inline popup in middle of message not working
+*** TODO Enter does not submit the form sometimes
+[[file:src/inline-popup.ts::const event = e as KeyboardEvent][ckEditor.addEventListener]]
+*** TODO Somehow figure out how to handle Esc closes inline popup but clicking in it does not
+[[file:src/inline-popup.ts::// ckEditor.addEventListener("blur", function() {][injectInlinePopup]]
+** Emojifying messages
+*** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
+** TODO Handle non-square emojis in grid better than forcing them to be square
+
+* Cleanup
+** TODO Replace [[file:src/emojifier.ts::const emojifyText = (text: string, emojis: string\[\]) => {][emojifyText]] with a regexp replace?
