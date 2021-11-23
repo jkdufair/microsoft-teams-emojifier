@@ -1,5 +1,7 @@
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
+export const MESSAGE_LIST_ITEM_CLASS = 'ts-message-list-item'
+export const CKEDITOR_CLASS = 'cke_wysiwyg_div'
 
 /**
  * Replace the partially or fully entered emoji command (colon plus an emoji name) with an img tag

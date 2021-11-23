@@ -1,5 +1,5 @@
 import fuzzysort from 'fuzzysort'
-import { emojifyCommand, createElementFromHTML, createImgTag } from './shared'
+import { emojifyCommand, createImgTag } from './shared'
 
 // fuzzysort does not appear to export types - replicating here
 interface Result {
