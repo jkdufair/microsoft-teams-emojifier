@@ -2,30 +2,6 @@ import { CKEDITOR_CLASS, createImgTag, MESSAGE_LIST_ITEM_CLASS } from './shared'
 import { injectInlinePopup } from './inline-popup'
 import { injectGridPopoverButton } from './grid-popup'
 
-// Required Features
-// TODO: Fix electron install
-// TODO: Reactions
-// TODO: Style grid popup a bit nicer
-// TODO: Load some/all basic emojis into server
-// TODO: Periodic emoji refresh
-
-// Nice to have someday
-// TODO: Large emoji when no text
-// TODO: Emoji server auth
-// TODO: alt text & popover for emojis
-// TODO: MRU
-// TODO: Websocket push when new emoji added
-// TODO: Add emojis to server with "{pasted image}+:emojiname:"
-
-// Bugs
-// TODO: Clicking and inserting two subsequent emoji from grid inserts second
-//   (and subsequent) emojis before cursor
-// TODO: Get enter working for completion from inline popup
-// TODO: First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
-// TODO: Handle non-square emojis in grid better than forcing them to be square
-// TODO: Handle hashchange better (navigate to "Teams" on sidebar then come back. No workie anymore)
-// TODO: Inline popup in middle of message not working
-
 // Note: An emoji "command" is the name of the emoji surrounded by colons
 
 // @ts-ignore defined via injection in contentScript.js
