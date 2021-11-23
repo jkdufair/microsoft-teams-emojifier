@@ -14,9 +14,17 @@
 ** TODO Add emojis to server with "{pasted image}+:emojiname:"
 
 * Bugs
-** TODO Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
-** TODO Get enter working for completion from inline popup (might not be possible)
-** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
+** Inline popup
+*** TODO Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
+*** TODO Get enter working for completion from inline popup (might not be possible)
+*** TODO Inline popup in middle of message not working
+*** TODO Enter does not submit the form sometimes
+[[file:src/inline-popup.ts::const event = e as KeyboardEvent][ckEditor.addEventListener]]
+*** TODO Somehow figure out how to handle Esc closes inline popup but clicking in it does not
+[[file:src/inline-popup.ts::// ckEditor.addEventListener("blur", function() {][injectInlinePopup]]
+** Emojifying messages
+*** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
 ** TODO Handle non-square emojis in grid better than forcing them to be square
-** TODO Inline popup in middle of message not working
 
+* Cleanup
+** TODO Replace [[file:src/emojifier.ts::const emojifyText = (text: string, emojis: string\[\]) => {][emojifyText]] with a regexp replace?

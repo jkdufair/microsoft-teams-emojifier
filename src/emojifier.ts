@@ -1,6 +1,6 @@
 import { CKEDITOR_CLASS, createImgTag, MESSAGE_LIST_ITEM_CLASS } from './shared'
 import { injectInlinePopup } from './inline-popup'
-import { injectGridPopoverButton } from './grid-popup'
+import { injectGridPopupButton } from './grid-popup'
 
 // Note: An emoji "command" is the name of the emoji surrounded by colons
 
@@ -48,8 +48,7 @@ const crawlTree = (element: Element, handleLeaf: { (leaf: Element): void }) => {
  * @param emojis - the list of emoji names
  */
 const emojifyText = (text: string, emojis: string[]) => {
-	// TODO: Can't we just replace this with a regexp replace?
-	var resultStr = ""
+  var resultStr = ""
 	var matches = text.matchAll(emojiMatch)
 	var currentIndexInInput = 0
 
@@ -204,7 +203,7 @@ const observeChanges = (emojis: string[]) => {
 			}) && [...mr.removedNodes].length > 0)
 		if (candidateMutationRecords.length > 0) {
 			const emojiButton = candidateMutationRecords[0].addedNodes[0].childNodes[2] as Element
-			injectGridPopoverButton(emojiButton, emojis)
+			injectGridPopupButton(emojiButton, emojis)
 		}
 	}
 

@@ -116,7 +116,7 @@ const createInlinePopup = (emojis: string[],
 
 	const onOpen = () => {
 		popup.style.display = "block"
-		// don't cut off the popover in replies
+		// don't cut off the popup in replies
 		for (const element of document.getElementsByClassName('ts-message-list-item')) {
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
@@ -213,7 +213,6 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojis: string[]) =>
 		}
 	}
 
-	// TODO: Somehow figure out how to handle Esc closes inline popup but clicking in it does not
 	// ckEditor.addEventListener("blur", function() {
 	// 	closeIfOpen()
 	// })
@@ -223,8 +222,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojis: string[]) =>
 	})
 
 	ckEditor.addEventListener("keydown", e => {
-		// TODO: Enter does not submit the form sometimes
-		const event = e as KeyboardEvent
+    const event = e as KeyboardEvent
 		// Submitting form - unemojify commands
 		if (event.key === 'Enter' && !isOpen)
 			unemojifyInput(ckEditor)

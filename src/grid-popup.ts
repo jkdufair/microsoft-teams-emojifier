@@ -39,7 +39,7 @@ const generateFilterBox = (onFilterChange: { (newFilter: string): void },
  * Create the element that displays and handles the emoji grid popup.
  * @param emojis - the list of emoji names
  * @param emojiSelectedListener - the function to execute when the emoji is chosen
- * @param closeListener - the function to execute when the popover is closed
+ * @param closeListener - the function to execute when the popup is closed
  */ 
 const createEmojiGrid = (emojis: string[],
 	emojiSelectedListener: { (event: Event | null, emoji: string): void },
@@ -99,7 +99,7 @@ const createEmojiGrid = (emojis: string[],
 		// Turn off watermark since so it doesn't look jumbled when selecting an emoji and no other
 		// text has been entered
 		document.getElementsByClassName('ts-text-watermark')[0].textContent = ""
-		// don't cut off the popover in replies
+		// don't cut off the popup in replies
 		for (const element of document.getElementsByClassName(MESSAGE_LIST_ITEM_CLASS)) {
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
@@ -114,11 +114,11 @@ const createEmojiGrid = (emojis: string[],
 }
 
 /**
- * Add the grid popover button and child elements to the DOM with listeners.
- * @param existingPreviewButton - Teams' emoji grid popover button :eww:
+ * Add the grid popup button and child elements to the DOM with listeners.
+ * @param existingPreviewButton - Teams' emoji grid popup button :eww:
  * @param emojis - the list of emoji names
  */
-export const injectGridPopoverButton = (existingPreviewButton: Element, emojis: string[]) => {
+export const injectGridPopupButton = (existingPreviewButton: Element, emojis: string[]) => {
 	// Clone the control to disconnect all event listeners
 	var emojiCloned = existingPreviewButton.cloneNode(true)
 	var buttonContainer = existingPreviewButton.parentNode
