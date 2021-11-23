@@ -1,5 +1,9 @@
 import fuzzysort from 'fuzzysort'
-import { emojifyCommand, createElementFromHTML, createImgTag } from './shared'
+import { emojifyCommand, createImgTag } from './shared'
+
+declare global {
+	var emojis: string[]
+}
 
 // fuzzysort does not appear to export types - replicating here
 interface Result {
@@ -16,6 +20,7 @@ interface Result {
 	/** Indexes of the matching target characters */
 	readonly indexes: number[]
 }
+
 interface Results extends ReadonlyArray<Result> {
 	/** Total matches before limit */
 	readonly total: number
@@ -29,14 +34,16 @@ interface EmojiChangeListener {
 const inlinePopupClassName = 'emoji-inline-popup'
 const hiddenEmojiMatch = /<img class="emoji-img" src="http.+?\/emoji\/(.*?)".*?>/g
 
+/**
+ * Remove img tags in CKEditor contents and replace them with emoji commands
+ */
 const unemojifyInput = (ckEditor: HTMLElement) => {
 	ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:")
 }
 
 /**
- * Given some text in which a range exists return the "command" which is the text between the
- * first colon up to the next space (or the end of the string)
- *
+ * Given some text in which a range exists, return the (possibly partial) emoji command text 
+ * (from the first colon up to the next space or the end of the string)
  * @param rangeData The string in which to look for a command
  */
 const getCommand = (rangeData: string | undefined): string | undefined => {
@@ -51,8 +58,11 @@ const getCommand = (rangeData: string | undefined): string | undefined => {
 	return undefined
 }
 
-const createInlinePopup = (emojiList: string[],
-	emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) => {
+/**
+ * Create the element that displays and handles the inline emoji popup.
+ * @param emojiSelectedListener - the function to execute when the emoji is chosen
+ */ 
+const createInlinePopup = (emojiSelectedListener: { (event: Event | null, commandText: string, emoji: string): void }) => {
 	const popup = document.createElement('div')
 	popup.classList.add(inlinePopupClassName)
 	let highlightedIndex = 0
@@ -63,9 +73,7 @@ const createInlinePopup = (emojiList: string[],
 		popup.innerHTML = ''
 		emojiChangeListeners = results.map((result: Result) => {
 			const { target: emoji } = result
-			const emojiElement = createElementFromHTML(
-				createImgTag(emoji)
-			) as HTMLImageElement
+			const emojiElement = createImgTag(emoji)
 			const span = document.createElement('span')
 			span.innerHTML = `:${fuzzysort.highlight(result, '<span class="fuzzy-highlight">', '</span>')}:`
 			span.style.cursor = 'default'
@@ -110,7 +118,7 @@ const createInlinePopup = (emojiList: string[],
 
 	const onOpen = () => {
 		popup.style.display = "block"
-		// don't cut off the popover in replies
+		// don't cut off the popup in replies
 		for (const element of document.getElementsByClassName('ts-message-list-item')) {
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
@@ -122,7 +130,7 @@ const createInlinePopup = (emojiList: string[],
 	}
 
 	const onFilter = (toFilter: string) => {
-		fuzzySorted = fuzzysort.go(toFilter, emojiList)
+		fuzzySorted = fuzzysort.go(toFilter, globalThis.emojis)
 		if (fuzzySorted.total > 0) {
 			injectFilteredElements(toFilter, fuzzySorted)
 			popup.style.display = "block"
@@ -171,7 +179,11 @@ const createInlinePopup = (emojiList: string[],
 	}
 }
 
-export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[]) => {
+/**
+ * Add the inlive popup and child elements to the DOM with listeners.
+ * @param ckEditor - the ckEditor control div
+ */
+export const injectInlinePopup = (ckEditor: HTMLDivElement) => {
 	const {
 		element: inlinePopup,
 		onOpen,
@@ -181,7 +193,6 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 		onHighlightPrevious,
 		getHighlightedEmoji
 	} = createInlinePopup(
-		emojiList,
 		(_: Event | null, commandText: string, emoji: string) => {
 			emojifyCommand(ckEditor, commandText, emoji)
 		}
@@ -202,7 +213,6 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 		}
 	}
 
-	// TODO: Somehow figure out how to handle Esc closes inline popup but clicking in it does not
 	// ckEditor.addEventListener("blur", function() {
 	// 	closeIfOpen()
 	// })
@@ -212,8 +222,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 	})
 
 	ckEditor.addEventListener("keydown", e => {
-		// TODO: Enter does not submit the form sometimes
-		const event = e as KeyboardEvent
+    const event = e as KeyboardEvent
 		// Submitting form - unemojify commands
 		if (event.key === 'Enter' && !isOpen)
 			unemojifyInput(ckEditor)
@@ -296,7 +305,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement, emojiList: string[])
 				isOpen = false
 			}
 			// replace emoji text with hidden div & the emoji image
-			if (ckEditor.innerHTML && emojiList.indexOf(command) != -1) {
+			if (ckEditor.innerHTML && globalThis.emojis.indexOf(command) != -1) {
 				event.preventDefault()
 				emojifyCommand(ckEditor, `:${command}:`, command)
 			}
