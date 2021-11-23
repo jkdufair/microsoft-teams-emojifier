@@ -1,4 +1,4 @@
-import { emojifyCommand, createElementFromHTML } from './shared'
+import { emojifyCommand, createElementFromHTML, createImgTag } from './shared'
 import { injectInlinePopup } from './inline-popup'
 
 // Required Features
@@ -20,11 +20,12 @@ import { injectInlinePopup } from './inline-popup'
 // TODO: Clicking and inserting two subsequent emoji from grid inserts second
 //   (and subsequent) emojis before cursor
 // TODO: Get enter working for completion from inline popup
-// TODO: Sometimes not loading on startup
 // TODO: First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
 // TODO: Handle non-square emojis in grid better than forcing them to be square
 // TODO: Handle hashchange better (navigate to "Teams" on sidebar then come back. No workie anymore)
 // TODO: Inline popup in middle of message not working
+
+// Note: An emoji "command" is the name of the emoji surrounded by colons
 
 // @ts-ignore defined via injection in contentScript.js
 const emojiApiPath = EMOJI_API_PATH
@@ -39,7 +40,10 @@ const CKEDITOR_CLASS = 'cke_wysiwyg_div'
 const EMOJI_BUTTON_NODE_NAME = 'INPUT-EXTENSION-EMOJI-V2'
 const emojiMatch = /:([\w-_]+):/g
 
-function getValidEmojis() {
+/**
+ * Fetch the emojis from the server then run resolve function with the list of the names.
+ */
+const getValidEmojis = () => {
 	return new Promise((resolve: (emojis: string[]) => void, _) => {
 		console.log('teamojis: fetching emojis')
 		$.get(emojiApiPath + "/emojis", (result: string[]) => {
@@ -49,57 +53,72 @@ function getValidEmojis() {
 	})
 }
 
-function createImgTag(emoticonName: string, shouldBeSquare = false) {
-	return (
-		`<img class="emoji-img${shouldBeSquare ? ' square' : ''}" src="${emojiApiPath}/emoji/${emoticonName}" title="${emoticonName}" loading="lazy">`
-	)
-}
-
-function crawlTree(htmlElement: Element, handleLeaf: { (leaf: Element): void }) {
-	if (htmlElement && htmlElement.childElementCount <= 0) {
-		handleLeaf(htmlElement)
+/**
+ * Utility function to execute a function on all children (recursive) of a DOM node.
+ * @param element - the DOM element to operate on
+ * @param handleLeaf - the function to execute on the leaf nodes
+ */
+const crawlTree = (element: Element, handleLeaf: { (leaf: Element): void }) => {
+	if (element && element.childElementCount <= 0) {
+		handleLeaf(element)
 		return
 	}
-	for (let index = 0; index < htmlElement.children.length; index++) {
-		const htmlChildElement = htmlElement.children[index]
-		crawlTree(htmlChildElement, handleLeaf)
-	}
+	[...element.children].forEach(element => {
+		crawlTree(element, handleLeaf)
+	})
 }
 
-function injectEmojiImages(inputText: string, validEmojis: string[]) {
+/**
+ * Given a string (normally some innerHTML), replace emoji commands with img tags.
+ * @param text - the text to operate on
+ * @param emojis - the list of emoji names
+ */
+const emojifyText = (text: string, emojis: string[]) => {
+	// TODO: Can't we just replace this with a regexp replace?
 	var resultStr = ""
-	var matches = inputText.matchAll(emojiMatch)
+	var matches = text.matchAll(emojiMatch)
 	var currentIndexInInput = 0
 
 	var match
 	while (!(match = matches.next()).done) {
 		var reInjectText = match.value[0]
-		if (validEmojis.indexOf(match.value[1]) != -1) {
+		if (emojis.indexOf(match.value[1]) != -1) {
 			const emojiName = match.value[1]
-			reInjectText = createImgTag(emojiName)
+			reInjectText = createImgTag(emojiName).outerHTML
 		}
 
-		resultStr += inputText.substring(currentIndexInInput, match.value.index)
+		resultStr += text.substring(currentIndexInInput, match.value.index)
 		resultStr += reInjectText
 		if (match.value.index != undefined)
 			currentIndexInInput = match.value.index + match.value[0].length
 	}
-	resultStr += inputText.substring(currentIndexInInput, inputText.length)
+	resultStr += text.substring(currentIndexInInput, text.length)
 	return resultStr
 }
 
-function emojifyMessageDiv(div: Element, validEmojis: string[]) {
-	crawlTree(div, (leaf: Element) => {
-		leaf.innerHTML = injectEmojiImages(
+/**
+ * Recursively replace any emoji commands in an element with img tags
+ * @param element - The parent element to recurs
+ * @param emojis - the list of emoji names
+ */
+const emojifyMessageDiv = (element: Element, emojis: string[]) => {
+	crawlTree(element, (leaf: Element) => {
+		leaf.innerHTML = emojifyText(
 			leaf.innerHTML,
-			validEmojis
+			emojis
 		)
 	})
 }
 
-function generateFilterBox(onFilterChange: { (newFilter: string): void },
+/**
+ * Create the element that handles filtering the emojis in the grid popup.
+ * @param onFilterChange - the function to execute when the filter text has changed
+ * @param debounce - number of milliseconds to delay when filter text has changed before executing onFilterChange
+ * @param onEmojiSelected - the function to execute when the emoji is chosen
+ */
+const generateFilterBox = (onFilterChange: { (newFilter: string): void },
 	debounce: number | undefined,
-	onFilterSelected: { (selectedFilter: string): void }) {
+	onEmojiSelected: { (selectedFilter: string): void }) => {
 	const inputBox = document.createElement("input")
 	inputBox.placeholder = "🔍  Search"
 	let lastTimeout = 0
@@ -114,7 +133,7 @@ function generateFilterBox(onFilterChange: { (newFilter: string): void },
 
 	inputBox.addEventListener("keydown", (event) => {
 		if (event.key === "Enter") {
-			onFilterSelected(inputBox.value)
+			onEmojiSelected(inputBox.value)
 		}
 	})
 
@@ -124,13 +143,15 @@ function generateFilterBox(onFilterChange: { (newFilter: string): void },
 	return inputBoxContainer
 }
 
-function filterEmoji(emojiName: string, filterText: string) {
-	return emojiName.includes(filterText)
-}
-
-function createEmojiGrid(emojiList: string[],
+/**
+ * Create the element that displays and handles the emoji grid popup.
+ * @param emojis - the list of emoji names
+ * @param emojiSelectedListener - the function to execute when the emoji is chosen
+ * @param closeListener - the function to execute when the popover is closed
+ */ 
+const createEmojiGrid = (emojis: string[],
 	emojiSelectedListener: { (event: Event | null, emoji: string): void },
-	closeListener: { (event: Event | undefined): void }) {
+	closeListener: { (event: Event | undefined): void }) => {
 	const table = document.createElement("div")
 	table.classList.add("emoji-flex-table")
 
@@ -149,16 +170,14 @@ function createEmojiGrid(emojiList: string[],
 		},
 		500,
 		(selectedFilter: string) => {
-			var emoji = emojiList.find((emoji) => emoji.includes(selectedFilter))
+			var emoji = emojis.find((emoji) => emoji.includes(selectedFilter))
 			if (emoji)
 				emojiSelectedListener(null, emoji)
 			onClose()
 		}
 	)
-	emojiFilterChangeListeners = emojiList.map((emoji) => {
-		const emojiElement = createElementFromHTML(
-			createImgTag(emoji, true)
-		) as HTMLImageElement
+	emojiFilterChangeListeners = emojis.map((emoji) => {
+		const emojiElement = createImgTag(emoji, true)
 		if (emojiElement) {
 			emojiElement.addEventListener("click", (event) => {
 				emojiSelectedListener(event, emoji)
@@ -166,7 +185,7 @@ function createEmojiGrid(emojiList: string[],
 			})
 			table.appendChild(emojiElement)
 			return (newFilter: string) => {
-				emojiElement.style.display = filterEmoji(emoji, newFilter)
+				emojiElement.style.display = emoji.includes(newFilter)
 					? "block"
 					: "none"
 			}
@@ -202,12 +221,17 @@ function createEmojiGrid(emojiList: string[],
 	}
 }
 
-function injectPreviewButton(previousPreviewButton: Element, emojiList: string[]) {
+/**
+ * Add the grid popover button and child elements to the DOM with listeners.
+ * @param existingPreviewButton - Teams' emoji grid popover button :eww:
+ * @param emojis - the list of emoji names
+ */
+const injectGridPopoverButton = (existingPreviewButton: Element, emojis: string[]) => {
 	// Clone the control to disconnect all event listeners
-	var emojiCloned = previousPreviewButton.cloneNode(true)
-	var buttonContainer = previousPreviewButton.parentNode
+	var emojiCloned = existingPreviewButton.cloneNode(true)
+	var buttonContainer = existingPreviewButton.parentNode
 	if (buttonContainer)
-		buttonContainer.replaceChild(emojiCloned, previousPreviewButton)
+		buttonContainer.replaceChild(emojiCloned, existingPreviewButton)
 
 	var open = false
 	var {
@@ -215,7 +239,7 @@ function injectPreviewButton(previousPreviewButton: Element, emojiList: string[]
 		onOpen,
 		onClose,
 	} = createEmojiGrid(
-		emojiList,
+		emojis,
 		(_: Event | null, emoji: string) => {
 			const ckEditor = (buttonContainer as HTMLElement)?.closest(`.${NEW_MESSAGE_CLASS}`)?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
 			if (ckEditor)
@@ -252,6 +276,9 @@ let newMessageObserver: MutationObserver | undefined
  * - emojify messages & replies that are created by us and others
  * - inject the inline popup for any replies
  *
+ * If elements are already added to the DOM, (i.e. while we are loading emojis from the server),
+ * emojify/inject them and set up child observers as necessary.
+ *
  * Structure of messages/containers:
  * #page-content-wrapper (the main content that gets injected early by teams)
  *   .ts-message-list-container (container for all message list items and "new conversation")
@@ -264,6 +291,8 @@ let newMessageObserver: MutationObserver | undefined
  *         .conversation-reply (one for each non-hidden reply)
  *         .ts-reply-message-footer (the footer where the ckeditor pops in)
  *           .cke_wysiwyg_div (the ckeditor itself)
+ *
+ * @param emojis - the list of emoji names
  */
 const observeChanges = (emojis: string[]) => {
 	if (!window.location.hash.includes('/conversations/')) {
@@ -301,7 +330,7 @@ const observeChanges = (emojis: string[]) => {
 				const tsMessageThreadBody = editMessageForm.parentElement as HTMLDivElement
 				if (tsMessageThreadBody)
 					tsMessageThreadBody.style.overflow = 'visible'
-				cke.innerHTML = injectEmojiImages(cke.innerHTML, emojis)
+				cke.innerHTML = emojifyText(cke.innerHTML, emojis)
 				injectInlinePopup(cke, emojis)
 			}, 100)
 		} else {
@@ -355,7 +384,7 @@ const observeChanges = (emojis: string[]) => {
 			}) && [...mr.removedNodes].length > 0)
 		if (candidateMutationRecords.length > 0) {
 			const emojiButton = candidateMutationRecords[0].addedNodes[0].childNodes[2] as Element
-			injectPreviewButton(emojiButton, emojis)
+			injectGridPopoverButton(emojiButton, emojis)
 		}
 	}
 
@@ -470,7 +499,10 @@ const observeChanges = (emojis: string[]) => {
 	}
 }
 
-function init() {
+/**
+ * Disable some built-in Teams :eww: stuff. Get the emojis and set up the Teamojinator for action!
+ */
+const init = () => {
 	// Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.handleText = function() { }

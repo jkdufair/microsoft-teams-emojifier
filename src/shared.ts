@@ -7,9 +7,9 @@ const emojiApiPath = EMOJI_API_PATH
  *
  * @param ckEditor - the element the user has typed into
  * @param commandText - the command (possibly incomplete) they have typed (i.e. :arn or :arnold)
- * @param emoji - the name of the emoji to use in the img tag
+ * @param emojiCommand - the name of the emoji to use in the img tag
  */
-export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | null, emoji: string) => {
+export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | null, emojiCommand: string) => {
 	ckEditor?.parentNode?.normalize()
 	ckEditor.focus()
 	let selection = window.getSelection()
@@ -25,9 +25,7 @@ export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | n
 		}
 
 		// insert img tag for emoji
-		const emojiImage = document.createElement('img')
-		emojiImage.classList.add('emoji-img')
-		emojiImage.src = `${emojiApiPath}/emoji/${emoji.replaceAll(':', '')}`
+		const emojiImage = createImgTag(emojiCommand.replaceAll(':', ''))
 		commandRange.insertNode(emojiImage)
 
 		// Put cursor after emoji
@@ -35,20 +33,18 @@ export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | n
 	}
 }
 
-export const createElementFromHTML = (htmlString: string) => {
-	var div = document.createElement("div")
-	div.innerHTML = htmlString.trim()
-	return div.firstChild
-}
-
-export const createImgTag = (emoticonName: string) => {
-	return (
-		'<img class="emoji-img" src="' +
-		emojiApiPath +
-		"/emoji/" +
-		emoticonName +
-		'" title="' +
-		emoticonName +
-		'" loading="lazy">'
-	)
+/**
+ * Return an HTMLImageElement for an img tag (lazy loaded) for a given emoji.
+ * @param emoji - the name of the emoji
+ * @param shouldBeSquare - whether to render the img tag with the "square" class that will force the emoji into a square
+ */
+export const createImgTag = (emoji: string, shouldBeSquare = false) => {
+	const imgTag = document.createElement('img')
+	imgTag.classList.add('emoji-img')
+	if (shouldBeSquare)
+		imgTag.classList.add('square')
+	imgTag.setAttribute('src', `${emojiApiPath}/emoji/${emoji}`)
+	imgTag.setAttribute('title', emoji)
+	imgTag.setAttribute('loading', 'lazy')
+	return imgTag
 }
