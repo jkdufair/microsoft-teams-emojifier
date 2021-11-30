@@ -13,8 +13,7 @@ export const CKEDITOR_CLASS = 'cke_wysiwyg_div'
  */
 export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | null, emojiCommand: string) => {
 	ckEditor?.parentNode?.normalize()
-	ckEditor.focus()
-	let selection = window.getSelection()
+  let selection = window.getSelection()
 	let commandRange = selection?.getRangeAt(0)
 
 	if (commandRange) {
@@ -26,7 +25,10 @@ export const emojifyCommand = (ckEditor: HTMLDivElement, commandText: string | n
 			commandRange.deleteContents()
 		}
 
-		// insert img tag for emoji
+		const spaceNode = document.createTextNode('\u00A0')
+		commandRange.insertNode(spaceNode)
+
+    // insert img tag for emoji
 		const emojiImage = createImgTag(emojiCommand.replaceAll(':', ''))
 		commandRange.insertNode(emojiImage)
 

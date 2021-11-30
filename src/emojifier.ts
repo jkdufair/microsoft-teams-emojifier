@@ -332,9 +332,9 @@ const fetchEmojis = (afterFetch: (() => void) | undefined = undefined) => {
 const init = () => {
 	// Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
 	// @ts-ignore
-	teamspace.services.EmoticonPickerHandler.prototype.handleText = function() { }
+  teamspace.services.EmoticonPickerHandler.prototype.handleText = () => { }
 	// @ts-ignore
-	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = function() { }
+	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = () => { }
 
 	fetchEmojis(() => {
 		observeChanges()
