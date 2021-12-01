@@ -1,5 +1,5 @@
 import fuzzysort from 'fuzzysort'
-import { emojifyCommand, createImgTag } from './shared'
+import { createImgTag, emojifyCommand, textNodeAtCursor } from './shared'
 
 declare global {
 	var emojis: string[]
@@ -41,21 +41,52 @@ const unemojifyInput = (ckEditor: HTMLElement) => {
 	ckEditor.innerHTML = ckEditor.innerHTML.replaceAll(hiddenEmojiMatch, ":$1:")
 }
 
+const getCaretCharacterOffsetWithin = (node: Node) => {
+	let caretOffset = 0
+	const doc = node.ownerDocument
+	const win = doc?.defaultView
+	let sel;
+	if (win && typeof win.getSelection != "undefined") {
+		sel = win.getSelection()
+		if (win && sel && sel.rangeCount > 0) {
+			const range = win.getSelection()?.getRangeAt(0)
+			const preCaretRange = range?.cloneRange()
+			if (range && preCaretRange) {
+				preCaretRange.selectNodeContents(node)
+				preCaretRange.setEnd(range.endContainer, range.endOffset)
+				caretOffset = preCaretRange.toString().length
+			}
+		}
+	}
+	return caretOffset;
+}
+
 /**
  * Given some text in which a range exists, return the (possibly partial) emoji command text 
  * (from the first colon up to the next space or the end of the string)
  * @param rangeData The string in which to look for a command
  */
-const getCommand = (rangeData: string | undefined): string | undefined => {
-	if (!rangeData) return undefined
+const getCommand = (): string | undefined => {
+	const node = textNodeAtCursor()
+  if (!node || !node.parentNode) return undefined
 
-	const matchWholeCommand = rangeData.match(/:(.+):/)
-	if (matchWholeCommand) return matchWholeCommand[1]
+	const text = (node.parentNode as HTMLElement).innerText
+  if (!text) return undefined
 
-	const matchPartialCommand = rangeData.match(/:([^ ]+).*$/)
-	if (matchPartialCommand) return matchPartialCommand[1]
+	const caretIndex = getCaretCharacterOffsetWithin(node.parentNode)
+	const previousColonIndex = text.lastIndexOf(':', caretIndex - 1)
+  const previousSpaceIndex = text.lastIndexOf(' ', caretIndex - 1)
+  const previousNbspIndex = text.lastIndexOf('\xa0', caretIndex - 1)
+	const previousSpaceLikeIndex = Math.max(previousSpaceIndex, previousNbspIndex)
+	if (previousSpaceLikeIndex > previousColonIndex) return undefined
 
-	return undefined
+	let nextSpaceIndex = text.indexOf(' ', caretIndex)
+	if (nextSpaceIndex === -1) nextSpaceIndex = text.length
+	let nextNbspIndex = text.indexOf('\xa0', caretIndex)
+	if (nextNbspIndex === -1) nextNbspIndex = text.length
+	let nextSpaceLikeIndex = Math.min(nextSpaceIndex, nextNbspIndex)
+	const command = text.substring(previousColonIndex + 1, nextSpaceLikeIndex)
+	return command
 }
 
 /**
@@ -227,9 +258,7 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement) => {
 		if (event.key === 'Enter' && !isOpen)
 			unemojifyInput(ckEditor)
 		if ((event.key === 'Tab') && isOpen) {
-			const selection = window.getSelection()
-			const commandRange = selection?.getRangeAt(0)
-			const command = getCommand((commandRange?.commonAncestorContainer as Text).wholeText)
+			const command = getCommand()
 			if (command) {
 				e.preventDefault()
 				e.stopPropagation()
@@ -255,9 +284,6 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement) => {
 	}
 
 	ckEditor.addEventListener("keyup", (e: Event) => {
-		const selection = window.getSelection()
-		const commandRange = selection?.getRangeAt(0)
-
 		const event = e as KeyboardEvent
 		if (event.key === 'ArrowDown' && isOpen) {
 			onHighlightNext()
@@ -281,7 +307,12 @@ export const injectInlinePopup = (ckEditor: HTMLDivElement) => {
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
 
-		const command = getCommand((commandRange?.commonAncestorContainer as Text).wholeText)
+		const command = getCommand()
+		if (event.key === ' ' || !command) {
+			onClose()
+			isOpen = false
+		}
+
 		if (command && (event.key.match(/^[a-z0-9_]$/i) || event.key === "Backspace")) {
 			onFilter(command)
 

@@ -20,12 +20,12 @@ CLOSED: [2021-11-23 Tue 13:37]
 ** TODO MRU
 ** TODO Websocket push when new emoji added
 ** TODO Add emojis to server with "{pasted image}+:emojiname:"
+** TODO Permanently hide a channel
 
 * Bugs
 ** Popups
 *** TODO Get enter working for completion from inline popup (might not be possible)
 *** TODO Using filter in grid popup loses cursor position in ckEditor
-*** TODO Inline popup in middle of message not working
 *** TODO Enter does not submit the form sometimes
 [[file:src/inline-popup.ts::const event = e as KeyboardEvent][ckEditor.addEventListener]]
 *** TODO Clear filter box on emoji selected
@@ -33,6 +33,8 @@ CLOSED: [2021-11-23 Tue 13:37]
 [[file:src/inline-popup.ts::// ckEditor.addEventListener("blur", function() {][injectInlinePopup]]
 *** DONE Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
 CLOSED: [2021-11-29 Mon 11:03]
+*** DONE Inline popup in middle of message not working
+CLOSED: [2021-12-01 Wed 17:21]
 ** Emojifying messages
 *** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
 ** TODO Handle non-square emojis in grid better than forcing them to be square
