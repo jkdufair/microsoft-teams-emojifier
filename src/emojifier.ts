@@ -38,7 +38,7 @@ const crawlTree = (element: Element, handleLeaf: { (leaf: Element): void }) => {
  * @param text - the text to operate on
  */
 const emojifyText = (text: string) => {
-  var resultStr = ""
+	var resultStr = ''
 	var matches = text.matchAll(emojiMatch)
 	var currentIndexInInput = 0
 
@@ -132,11 +132,12 @@ const observeChanges = () => {
 			setTimeout(() => {
 				console.log('teamojis: Edit started. Injecting images and inline popup.')
 				const editMessageForm = cke.closest('.edit-message-form') as HTMLDivElement
-				if (editMessageForm)
+				if (editMessageForm) {
 					editMessageForm.style.overflow = 'visible'
-				const tsMessageThreadBody = editMessageForm.parentElement as HTMLDivElement
-				if (tsMessageThreadBody)
-					tsMessageThreadBody.style.overflow = 'visible'
+					const tsMessageThreadBody = editMessageForm.parentElement as HTMLDivElement
+					if (tsMessageThreadBody)
+						tsMessageThreadBody.style.overflow = 'visible'
+				}
 				cke.innerHTML = emojifyText(cke.innerHTML)
 				injectInlinePopup(cke)
 			}, 100)
@@ -323,7 +324,7 @@ const fetchEmojis = (afterFetch: (() => void) | undefined = undefined) => {
 		})
 		.catch(_ => {
 			console.error('teamojis: error loading emojis')
-		})	
+		})
 }
 
 /**
@@ -332,7 +333,7 @@ const fetchEmojis = (afterFetch: (() => void) | undefined = undefined) => {
 const init = () => {
 	// Disable Teams' :stupit: auto-emoji generation. We can handle our own colons just fine, tyvm
 	// @ts-ignore
-  teamspace.services.EmoticonPickerHandler.prototype.handleText = () => { }
+	teamspace.services.EmoticonPickerHandler.prototype.handleText = () => { }
 	// @ts-ignore
 	teamspace.services.EmoticonPickerHandler.prototype.insertInEditor = () => { }
 
