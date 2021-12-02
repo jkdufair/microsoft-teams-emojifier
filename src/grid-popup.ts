@@ -43,19 +43,14 @@ const generateFilterBox = (onFilterChange: { (newFilter: string): void },
  * Create the element that displays and handles the emoji grid popup.
  * @param emojiSelectedListener - the function to execute when the emoji is chosen
  * @param closeListener - the function to execute when the popup is closed
- */ 
+ */
 const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: string): void },
 	closeListener: { (event: Event | undefined): void }) => {
 	const table = document.createElement("div")
 	table.classList.add("emoji-flex-table")
 
 	let emojiFilterChangeListeners: (((filter: string) => void) | undefined)[] = []
-	const onClose = (event?: Event | undefined) => {
-		// FIXME
-		//filterBox.value = ""
-		emojiFilterChangeListeners.forEach((onchange) => { if (onchange) onchange("") })
-		closeListener(event)
-	}
+
 	const filterBox = generateFilterBox(
 		(newFilter: string) => {
 			emojiFilterChangeListeners.forEach((onchange) => { if (onchange) onchange(newFilter) })
@@ -70,6 +65,10 @@ const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: s
 			onClose()
 		}
 	)
+	const onClose = (event?: Event | undefined) => {
+    emojiFilterChangeListeners.forEach((onchange) => { if (onchange) onchange("") })
+    closeListener(event)
+	}
 	emojiFilterChangeListeners = globalThis.emojis.map((emoji) => {
 		const emojiElement = createImgTag(emoji, true)
 		if (emojiElement) {
@@ -106,7 +105,8 @@ const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: s
 			(element as HTMLDivElement).style.overflow = "visible"
 		}
 		emojiTableContainer.scrollTop = emojiTableContainer.scrollHeight;
-		(filterBox.firstChild as HTMLInputElement).focus()
+		// If we set focus, we lose the position in the CKEditor. Has been added as an issue.
+		//(filterBox.firstChild as HTMLInputElement).focus()
 	}
 	return {
 		element: outputT,
@@ -117,14 +117,14 @@ const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: s
 
 /**
  * Add the grid popup button and child elements to the DOM with listeners.
- * @param existingPreviewButton - Teams' emoji grid popup button :eww:
+ * @param existingPopupButton - Teams' emoji grid popup button :eww:
  */
-export const injectGridPopupButton = (existingPreviewButton: Element) => {
+export const injectGridPopupButton = (existingPopupButton: Element) => {
 	// Clone the control to disconnect all event listeners
-	var emojiCloned = existingPreviewButton.cloneNode(true)
-	var buttonContainer = existingPreviewButton.parentNode
+	var clonedPopupButton = existingPopupButton.cloneNode(true)
+	var buttonContainer = existingPopupButton.parentNode
 	if (buttonContainer)
-		buttonContainer.replaceChild(emojiCloned, existingPreviewButton)
+		buttonContainer.replaceChild(clonedPopupButton, existingPopupButton)
 
 	var open = false
 	var {
@@ -132,7 +132,7 @@ export const injectGridPopupButton = (existingPreviewButton: Element) => {
 		onOpen,
 		onClose,
 	} = createEmojiGrid(
-    (_: Event | null, emoji: string) => {
+		(_: Event | null, emoji: string) => {
 			const ckEditor = (buttonContainer as HTMLElement)?.closest(`.${NEW_MESSAGE_CLASS}`)?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
 			if (ckEditor)
 				emojifyCommand(ckEditor, null, emoji)
@@ -145,7 +145,7 @@ export const injectGridPopupButton = (existingPreviewButton: Element) => {
 	if (buttonContainer)
 		buttonContainer.appendChild(emojiTable)
 
-	emojiCloned.addEventListener("click", () => {
+	clonedPopupButton.addEventListener("click", () => {
 		if (open) {
 			onClose()
 			open = false
