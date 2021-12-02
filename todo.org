@@ -31,13 +31,12 @@ CLOSED: [2021-11-23 Tue 13:37]
 *** TODO Clear filter box on emoji selected
 *** TODO Somehow figure out how to handle Esc closes inline popup but clicking in it does not
 [[file:src/inline-popup.ts::// ckEditor.addEventListener("blur", function() {][injectInlinePopup]]
-*** DONE Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
+*** TODO Handle non-square emojis in grid better than forcing them to be square*** DONE Clicking and inserting two subsequent emoji from grid inserts second (and subsequent) emojis before cursor
 CLOSED: [2021-11-29 Mon 11:03]
 *** DONE Inline popup in middle of message not working
 CLOSED: [2021-12-01 Wed 17:21]
 ** Emojifying messages
 *** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
-** TODO Handle non-square emojis in grid better than forcing them to be square
 
 * Cleanup
 ** TODO Replace [[file:src/emojifier.ts::const emojifyText = (text: string, emojis: string\[\]) => {][emojifyText]] with a regexp replace?

@@ -78,8 +78,10 @@ const getCommand = (): string | undefined => {
   const previousSpaceIndex = text.lastIndexOf(' ', caretIndex - 1)
   const previousNbspIndex = text.lastIndexOf('\xa0', caretIndex - 1)
 	const previousSpaceLikeIndex = Math.max(previousSpaceIndex, previousNbspIndex)
-	if (previousSpaceLikeIndex > previousColonIndex) return undefined
+	// Either there is no colon or there is a space preceding the text at the cursor
+	if (previousColonIndex === -1 || previousSpaceLikeIndex > previousColonIndex) return undefined
 
+	// Return the text from the preceding colon to the next space or the end of the line
 	let nextSpaceIndex = text.indexOf(' ', caretIndex)
 	if (nextSpaceIndex === -1) nextSpaceIndex = text.length
 	let nextNbspIndex = text.indexOf('\xa0', caretIndex)
