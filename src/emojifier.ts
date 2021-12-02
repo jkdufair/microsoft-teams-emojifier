@@ -346,6 +346,22 @@ const init = () => {
 
 	// re-fetch the emojis every minute
 	setInterval(fetchEmojis, 1000 * 60)
+
+	// @ts-ignore
+	window.XMLHttpRequest.prototype._setRequestHeader = XMLHttpRequest.prototype.setRequestHeader
+	window.XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader() {
+		console.log('teamoji set header', arguments)
+		// @ts-ignore
+		window.XMLHttpRequest.prototype._setRequestHeader.apply(this, arguments)
+	}
+
+	// @ts-ignore
+	window.XMLHttpRequest.prototype._send = XMLHttpRequest.prototype.send
+	window.XMLHttpRequest.prototype.send = function send() {
+		console.log('teamoji send arguments: ', arguments)
+		// @ts-ignore
+		window.XMLHttpRequest.prototype._send.apply(this, arguments);
+	}
 }
 
 init()
