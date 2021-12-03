@@ -1,4 +1,4 @@
-import { CKEDITOR_CLASS, createImgTag, MESSAGE_LIST_ITEM_CLASS } from './shared'
+import { CKEDITOR_CLASS, createImgTag, emojifyCommand, MESSAGE_LIST_ITEM_CLASS } from './shared'
 import { injectInlinePopup } from './inline-popup'
 import { injectGridPopupButton } from './grid-popup'
 
@@ -17,6 +17,7 @@ const MESSAGE_LIST_CONTAINER_CLASS = 'ts-message-list-container'
 const MESSAGE_CLASS = 'ts-message'
 const MESSAGE_FOOTER_CLASS = 'ts-reply-message-footer'
 const EMOJI_BUTTON_NODE_NAME = 'INPUT-EXTENSION-EMOJI-V2'
+const NEW_MESSAGE_CLASS = 'ts-new-message'
 const emojiMatch = /:([\w-_]+):/g
 
 /**
@@ -193,7 +194,16 @@ const observeChanges = () => {
 			}) && [...mr.removedNodes].length > 0)
 		if (candidateMutationRecords.length > 0) {
 			const emojiButton = candidateMutationRecords[0].addedNodes[0].childNodes[2] as Element
-			injectGridPopupButton(emojiButton)
+			const emojiButtonContainer = emojiButton.parentElement
+			injectGridPopupButton(emojiButton,
+														emojiButtonContainer as HTMLElement,
+														(_: Event | null, emoji: string) => {
+															const ckEditor = (emojiButtonContainer as HTMLElement)
+																?.closest(`.${NEW_MESSAGE_CLASS}`)
+																?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
+															if (ckEditor)
+																emojifyCommand(ckEditor, null, emoji)
+														})
 		}
 	}
 
@@ -307,17 +317,49 @@ const observeChanges = () => {
 		observePageContentWrapperChanges(pageContentWrapper)
 	}
 
-	const bodyObserver = new MutationObserver((mutationRecords: MutationRecord[]) => {
-		console.log('teamoji body mutations: ', mutationRecords)
-			mutationRecords.forEach((mr): void => {
+	const createPopupButton = () => {
+		const li = document.createElement('li')
+		const img = document.createElement('img')
+		img.setAttribute('src', `${emojiApiPath}/emoji/teams-dumpster-fire`)
+		img.classList.add('emoji-reaction-button')
+		const button = document.createElement('button')
+		button.type = 'button'
+		button.setAttribute('role', 'button')
+		button.classList.add('ts-sym')
+		button.classList.add('icons-emoji')
+		button.classList.add('app-icons-fill-focus')
+		button.appendChild(img)
+		li.appendChild(button)
+		return { button, li }
+	}
+
+	const reactionsCallback = (mutationRecords: MutationRecord[]) => {
+		let didAddGridPopupButton = false
+    mutationRecords.forEach((mr): void => {
 				mr.addedNodes.forEach((node): void => {
 					// Filter out the comment nodes
 					if (node.nodeName === 'DIV' && (node as HTMLDivElement).classList.contains('message-actions-popover-container')) {
-						console.log('teamoji node: ', node)
+						const ulNode = (node as Element).getElementsByTagName('UL')[0]
+						ulNode.childNodes.forEach(childNode => {
+							if ((childNode as HTMLLIElement).classList?.contains('message-emoji-reaction')) {
+                ulNode.removeChild(childNode)
+							}
+						})
+						if (!didAddGridPopupButton) {
+							didAddGridPopupButton = true
+							const { button, li } = createPopupButton()
+							ulNode.prepend(li)
+							injectGridPopupButton(button, node as Element, (event: Event | null, emoji: string) => {
+								console.log('teamoji event: ', event)
+								console.log('teamoji emoji', emoji)
+							}, false)
+						}
 					}
 				})
 			})
-	})
+	}
+	const bodyObserver = new MutationObserver(reactionsCallback)
+
 	bodyObserver.observe(document.body, { childList: true })
 }
 

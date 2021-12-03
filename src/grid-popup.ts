@@ -1,10 +1,8 @@
-import { CKEDITOR_CLASS, createImgTag, emojifyCommand, MESSAGE_LIST_ITEM_CLASS } from './shared'
+import { createImgTag, MESSAGE_LIST_ITEM_CLASS } from './shared'
 
 declare global {
 	var emojis: string[]
 }
-
-const NEW_MESSAGE_CLASS = 'ts-new-message'
 
 /**
  * Create the element that handles filtering the emojis in the grid popup.
@@ -117,35 +115,36 @@ const createEmojiGrid = (emojiSelectedListener: { (event: Event | null, emoji: s
 
 /**
  * Add the grid popup button and child elements to the DOM with listeners.
- * @param existingPopupButton - Teams' emoji grid popup button :eww:
+ * @param existingButton - Teams' emoji grid popup button :eww: or the reaction button
  */
-export const injectGridPopupButton = (existingPopupButton: Element) => {
-	// Clone the control to disconnect all event listeners
-	var clonedPopupButton = existingPopupButton.cloneNode(true)
-	var buttonContainer = existingPopupButton.parentNode
-	if (buttonContainer)
-		buttonContainer.replaceChild(clonedPopupButton, existingPopupButton)
-
+export const injectGridPopupButton = (
+	existingButton: Element,
+	existingButtonContainer: Element,
+	emojiSelectedListener: (event: Event | null, emoji: string) => void,
+	shouldClone: boolean = true
+) => {
+  let button = existingButton
+	if (shouldClone) {
+		// Clone the control to disconnect all event listeners
+		button = existingButton.cloneNode(true) as Element
+		existingButtonContainer.replaceChild(button, existingButton)
+	}
 	var open = false
 	var {
 		element: emojiTable,
 		onOpen,
 		onClose,
 	} = createEmojiGrid(
-		(_: Event | null, emoji: string) => {
-			const ckEditor = (buttonContainer as HTMLElement)?.closest(`.${NEW_MESSAGE_CLASS}`)?.querySelector(`.${CKEDITOR_CLASS}`) as HTMLDivElement
-			if (ckEditor)
-				emojifyCommand(ckEditor, null, emoji)
-		},
+		emojiSelectedListener,
 		(_) => {
 			emojiTable.style.display = "none"
 			open = false
 		}
 	)
-	if (buttonContainer)
-		buttonContainer.appendChild(emojiTable)
 
-	clonedPopupButton.addEventListener("click", () => {
+	existingButtonContainer.appendChild(emojiTable)
+
+	button.addEventListener("click", () => {
 		if (open) {
 			onClose()
 			open = false

@@ -14,6 +14,11 @@
 	}
 }
 
+.emoji-reaction-button {
+	height: 20px;
+	margin: 6px 0 6px 3px;
+}
+
 .emoji-inline-popup {
   position: absolute;
 	top: -250px;
@@ -50,8 +55,6 @@
   background: #FFF;
   position: absolute;
   z-index: 1000;
-  left: 100px;
-  bottom: 30px;
   font-size: 1.4rem;
   display: none;
   color: black;
@@ -64,6 +67,20 @@
 		width: 100%;
 		border: 2px solid #ccc;
 		height: 3rem;
+	}
+}
+
+.compose-stripe-directive {
+	& .emoji-popup {
+		left: 100px;
+		bottom: 30px;
+	}
+}
+
+.message-actions-popover-container {
+	& .emoji-popup {
+		left: -340px;
+		bottom: 30px;
 	}
 }
 
@@ -96,4 +113,12 @@
 .fuzzy-highlight {
 	background-color: rgba(242, 199, 68, 0.4);
 	color: #0b4c8c;
+}
+
+.message-actions-popover-container.reactions-v2-enabled {
+	width: inherit !important
+}
+
+.reactions-v2-enabled .message-reaction-container {
+	width: 3.5rem !important
 }
