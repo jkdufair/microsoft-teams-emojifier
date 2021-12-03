@@ -4,6 +4,7 @@ import { injectGridPopupButton } from './grid-popup'
 
 declare global {
 	var emojis: string[]
+	var savedHeaders: { [header: string]: string | null }
 }
 
 // Note: An emoji "command" is the name of the emoji surrounded by colons
@@ -305,6 +306,19 @@ const observeChanges = () => {
 		console.log('teamojis: PageContentWrapper exists. Observing changes to contents')
 		observePageContentWrapperChanges(pageContentWrapper)
 	}
+
+	const bodyObserver = new MutationObserver((mutationRecords: MutationRecord[]) => {
+		console.log('teamoji body mutations: ', mutationRecords)
+			mutationRecords.forEach((mr): void => {
+				mr.addedNodes.forEach((node): void => {
+					// Filter out the comment nodes
+					if (node.nodeName === 'DIV' && (node as HTMLDivElement).classList.contains('message-actions-popover-container')) {
+						console.log('teamoji node: ', node)
+					}
+				})
+			})
+	})
+	bodyObserver.observe(document.body, { childList: true })
 }
 
 /**
@@ -347,10 +361,23 @@ const init = () => {
 	// re-fetch the emojis every minute
 	setInterval(fetchEmojis, 1000 * 60)
 
+	globalThis.savedHeaders = {}
+
 	// @ts-ignore
 	window.XMLHttpRequest.prototype._setRequestHeader = XMLHttpRequest.prototype.setRequestHeader
 	window.XMLHttpRequest.prototype.setRequestHeader = function setRequestHeader() {
-		console.log('teamoji set header', arguments)
+		const headersToSave = [
+			'Authentication',
+			'ClientInfo',
+			'x-ms-scenario-id',
+			'x-ms-user-type',
+			'x-ms-client-type',
+			'x-ms-client-env',
+			'xm-ms-client-version',
+			'x-ms-session-id']
+    if (headersToSave.includes(arguments[0]))
+			globalThis.savedHeaders[arguments[0]] = arguments[1]
+		console.log('XMLHttpRequest headers: ', arguments)
 		// @ts-ignore
 		window.XMLHttpRequest.prototype._setRequestHeader.apply(this, arguments)
 	}
@@ -358,7 +385,7 @@ const init = () => {
 	// @ts-ignore
 	window.XMLHttpRequest.prototype._send = XMLHttpRequest.prototype.send
 	window.XMLHttpRequest.prototype.send = function send() {
-		console.log('teamoji send arguments: ', arguments)
+		console.log('XMLHttpRequest send: ', arguments)
 		// @ts-ignore
 		window.XMLHttpRequest.prototype._send.apply(this, arguments);
 	}
