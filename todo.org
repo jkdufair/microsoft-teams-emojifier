@@ -39,4 +39,5 @@ CLOSED: [2021-12-01 Wed 17:21]
 *** TODO First conversation in a channel not emojifying (until the :stupit: "let's get the conversation started" header no longer appears)
 
 * Cleanup
+** TODO Don't hard code 'teamoji-dumpster-fire' for reaction icon
 ** TODO Replace [[file:src/emojifier.ts::const emojifyText = (text: string, emojis: string\[\]) => {][emojifyText]] with a regexp replace?

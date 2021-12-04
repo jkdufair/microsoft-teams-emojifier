@@ -1,6 +1,7 @@
 import { CKEDITOR_CLASS, createImgTag, emojifyCommand, MESSAGE_LIST_ITEM_CLASS } from './shared'
 import { injectInlinePopup } from './inline-popup'
 import { injectGridPopupButton } from './grid-popup'
+import { addReactionHover } from './reactions'
 
 declare global {
 	var emojis: string[]
@@ -220,19 +221,21 @@ const observeChanges = () => {
 	}
 
 	// Observe the message list container for additions of message list items.  When any are added,
-	// emojify the text in them. Also observe the footer of the message list item and inject the
-	// inline popup if a reply is started
+	// emojify the text in them and add hovers for replies. Also observe the footer of the message
+	// list item and inject the inline popup if a reply is started
 	const messageListContainerCallback = (mutationsList: MutationRecord[]) => {
 		if (hasMessageListItems(mutationsList)) {
 			const mutationRecords = mutationsList.filter((mr: MutationRecord) => mr.addedNodes.length > 0)
 			mutationRecords.forEach((mr): void => {
 				mr.addedNodes.forEach((node): void => {
-					// Filter out the comment nodes
+					// Filter out the comment nodes. The rest will message list items
 					if (node.nodeName === 'DIV') {
 						// Emojify the message
 						const messageListItem = ((node as HTMLDivElement).closest(`.${MESSAGE_LIST_ITEM_CLASS}`)) as Element
 						console.log(`teamojis: .message-list-item injected at position ${messageListItem.getAttribute('data-scroll-pos')}`)
-						emojifyMessageDiv(messageListItem)
+						const messageBodies = (node as Element).querySelectorAll('.message-body.message-body-width')
+						addReactionHover(messageBodies)
+            emojifyMessageDiv(messageListItem)
 
 						// Watch for replies
 						if (!messageItemReplyObserver)
@@ -316,51 +319,6 @@ const observeChanges = () => {
 		console.log('teamojis: PageContentWrapper exists. Observing changes to contents')
 		observePageContentWrapperChanges(pageContentWrapper)
 	}
-
-	const createPopupButton = () => {
-		const li = document.createElement('li')
-		const img = document.createElement('img')
-		img.setAttribute('src', `${emojiApiPath}/emoji/teams-dumpster-fire`)
-		img.classList.add('emoji-reaction-button')
-		const button = document.createElement('button')
-		button.type = 'button'
-		button.setAttribute('role', 'button')
-		button.classList.add('ts-sym')
-		button.classList.add('icons-emoji')
-		button.classList.add('app-icons-fill-focus')
-		button.appendChild(img)
-		li.appendChild(button)
-		return { button, li }
-	}
-
-	const reactionsCallback = (mutationRecords: MutationRecord[]) => {
-		let didAddGridPopupButton = false
-    mutationRecords.forEach((mr): void => {
-				mr.addedNodes.forEach((node): void => {
-					// Filter out the comment nodes
-					if (node.nodeName === 'DIV' && (node as HTMLDivElement).classList.contains('message-actions-popover-container')) {
-						const ulNode = (node as Element).getElementsByTagName('UL')[0]
-						ulNode.childNodes.forEach(childNode => {
-							if ((childNode as HTMLLIElement).classList?.contains('message-emoji-reaction')) {
-                ulNode.removeChild(childNode)
-							}
-						})
-						if (!didAddGridPopupButton) {
-							didAddGridPopupButton = true
-							const { button, li } = createPopupButton()
-							ulNode.prepend(li)
-							injectGridPopupButton(button, node as Element, (event: Event | null, emoji: string) => {
-								console.log('teamoji event: ', event)
-								console.log('teamoji emoji', emoji)
-							}, false)
-						}
-					}
-				})
-			})
-	}
-	const bodyObserver = new MutationObserver(reactionsCallback)
-
-	bodyObserver.observe(document.body, { childList: true })
 }
 
 /**

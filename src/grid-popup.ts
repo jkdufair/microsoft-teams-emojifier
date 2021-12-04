@@ -121,7 +121,8 @@ export const injectGridPopupButton = (
 	existingButton: Element,
 	existingButtonContainer: Element,
 	emojiSelectedListener: (event: Event | null, emoji: string) => void,
-	shouldClone: boolean = true
+	shouldClone: boolean = true,
+	shouldDisplayImmediately: boolean = false
 ) => {
   let button = existingButton
 	if (shouldClone) {
@@ -141,6 +142,9 @@ export const injectGridPopupButton = (
 			open = false
 		}
 	)
+
+	if (shouldDisplayImmediately)
+    onOpen()
 
 	existingButtonContainer.appendChild(emojiTable)
 
